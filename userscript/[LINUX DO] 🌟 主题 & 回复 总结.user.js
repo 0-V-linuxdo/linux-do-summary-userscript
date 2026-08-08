@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260507] v1.0.1
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260808] v1.2.0
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260507] v1.0.1
-// @update-log   [20260507] v1.0.1: 识别模型内容安全策略拦截（content_filter）并显示明确错误，标记为不可重试以避免无效自动重试。
+// @version      [20260808] v1.2.0
+// @update-log   [20260808] v1.2.0: 新增默认关闭的 DeArrow 标题党检测与标题改写，支持独立判断/改写模型、自定义作用 URL、状态图标、悬停临时查看原标题、重新改写与本地/Drive 同步；完善 SPA/移动布局和异步状态一致性，内容提取 429 采用 10 秒起指数退避；标题改写支持仅首帖的多模态识图，并修复图片附件元数据误判。
 // @original     WhalelnColdSky
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -15,6 +15,12 @@
 // @connect      www.googleapis.com
 // @connect      content.googleapis.com
 // @connect      www.googleapis.cn
+// @connect      linux.do
+// @connect      *.linux.do
+// @connect      ldstatic.com
+// @connect      *.ldstatic.com
+// @connect      discourse-cdn.com
+// @connect      *.discourse-cdn.com
 // @icon         data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDEyMCAxMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGRlZnM+CiAgICAgIDxsaW5lYXJHcmFkaWVudCBpZD0icXVhbnR1bUdyYWRpZW50IiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxQTIwMjgiIHN0b3Atb3BhY2l0eT0iMSIvPgogICAgICAgICAgPHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiMyQzM2NDIiIHN0b3Atb3BhY2l0eT0iMC44Ii8+CiAgICAgICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMxRTI3MzMiIHN0b3Atb3BhY2l0eT0iMSIvPgogICAgICA8L2xpbmVhckdyYWRpZW50PgogICAgICA8cGF0dGVybiBpZD0icXVhbnR1bUdyaWQiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgICAgICA8cGF0aCBkPSJNMTAgMCBMMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzNFNEE1NiIgc3Ryb2tlLXdpZHRoPSIwLjciIHN0cm9rZS1kYXNoYXJyYXk9IjEsMSIvPgogICAgICA8L3BhdHRlcm4+CiAgICAgIDxjbGlwUGF0aCBpZD0ic3BoZXJlQ2xpcCI+CiAgICAgICAgICA8Y2lyY2xlIGN4PSI2MCIgY3k9IjYwIiByPSI0NyIvPgogICAgICA8L2NsaXBQYXRoPgogICAgICA8ZmlsdGVyIGlkPSJxdWFudHVtUHVsc2UiPgogICAgICAgICAgPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMyIvPgogICAgICAgICAgPGZlQ29sb3JNYXRyaXggdHlwZT0ibWF0cml4IiB2YWx1ZXM9IjEgMCAwIDAgMCAgMCAxIDAgMCAwICAwIDAgMSAwIDAgIDAgMCAwIDAuNiAwIi8+CiAgICAgICAgICA8ZmVCbGVuZCBtb2RlPSJzY3JlZW4iIGluMj0iU291cmNlR3JhcGhpYyIvPgogICAgICA8L2ZpbHRlcj4KICA8L2RlZnM+CiAgPGNpcmNsZSBjeD0iNjAiIGN5PSI2MCIgcj0iNTAiIGZpbGw9InVybCgjcXVhbnR1bUdyYWRpZW50KSIvPgogIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiBmaWxsPSJ1cmwoI3F1YW50dW1HcmlkKSIgb3BhY2l0eT0iMC4zIi8+CiAgPGcgY2xpcC1wYXRoPSJ1cmwoI3NwaGVyZUNsaXApIj4KICAgICAgPGc+CiAgICAgICAgICA8cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMDAiIGhlaWdodD0iMzAiIGZpbGw9IiMxQzFDMUUiIHJ4PSI4IiByeT0iOCIgb3BhY2l0eT0iMC45Ij4KICAgICAgICAgICAgICA8YW5pbWF0ZSBhdHRyaWJ1dGVOYW1lPSJvcGFjaXR5IiB2YWx1ZXM9IjAuNzswLjk7MC43IiBkdXI9IjRzIiByZXBlYXRDb3VudD0iaW5kZWZpbml0ZSIvPgogICAgICAgICAgPC9yZWN0PgogICAgICAgICAgPGc+CiAgICAgICAgICAgICAgPHJlY3QgeD0iMTAiIHk9IjQwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjBGMEYwIiByeD0iOCIgcnk9IjgiLz4KICAgICAgICAgICAgICA8ZyBzdHJva2U9IiMyQzMwMzYiIHN0cm9rZS13aWR0aD0iMC43IiBmaWxsPSJub25lIiBvcGFjaXR5PSIwLjciPgogICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTUgNTAgSDEwNSBNMTUgNjAgSDEwNSBNMTUgNzAgSDEwNSIgc3Ryb2tlLWRhc2hhcnJheT0iMywyIi8+CiAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0yNSA0NSBWNzUgTTQ1IDQ1IFY3NSBNNjUgNDUgVjc1IE04NSA0NSBWNzUiIHN0cm9rZS1kYXNoYXJyYXk9IjIsMiIvPgogICAgICAgICAgICAgIDwvZz4KICAgICAgICAgIDwvZz4KICAgICAgICAgIDxyZWN0IHg9IjEwIiB5PSI4MCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIzMCIgZmlsbD0iI0ZGQjAwMyIgcng9IjgiIHJ5PSI4IiBvcGFjaXR5PSIwLjgiPgogICAgICAgICAgICAgIDxhbmltYXRlIGF0dHJpYnV0ZU5hbWU9Im9wYWNpdHkiIHZhbHVlcz0iMC42OzAuOTswLjYiIGR1cj0iNHMiIHJlcGVhdENvdW50PSJpbmRlZmluaXRlIi8+CiAgICAgICAgICA8L3JlY3Q+CiAgICAgIDwvZz4KICAgICAgPGc+CiAgICAgICAgICA8Y2lyY2xlIGN4PSI2MCIgY3k9IjYwIiByPSIxNSIgZmlsbD0iI0ZGNDUwMCIgZmlsdGVyPSJ1cmwoI3F1YW50dW1QdWxzZSkiIG9wYWNpdHk9IjAuOCI+CiAgICAgICAgICAgICAgPGFuaW1hdGUgYXR0cmlidXRlTmFtZT0iciIgdmFsdWVzPSIxMjsyMDsxMiIgZHVyPSI0cyIgcmVwZWF0Q291bnQ9ImluZGVmaW5pdGUiLz4KICAgICAgICAgIDwvY2lyY2xlPgogICAgICAgICAgPGc+CiAgICAgICAgICAgICAgPGNpcmNsZSBjeD0iNjAiIGN5PSI2MCIgcj0iMjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGNjM0NyIgc3Ryb2tlLXdpZHRoPSIyIiBvcGFjaXR5PSIwLjQiPgogICAgICAgICAgICAgICAgICA8YW5pbWF0ZSBhdHRyaWJ1dGVOYW1lPSJyIiB2YWx1ZXM9IjI1OzUwOzI1IiBkdXI9IjRzIiByZXBlYXRDb3VudD0iaW5kZWZpbml0ZSIvPgogICAgICAgICAgICAgICAgICA8YW5pbWF0ZSBhdHRyaWJ1dGVOYW1lPSJvcGFjaXR5IiB2YWx1ZXM9IjAuNDswOzAuNCIgZHVyPSI0cyIgcmVwZWF0Q291bnQ9ImluZGVmaW5pdGUiLz4KICAgICAgICAgICAgICA8L2NpcmNsZT4KICAgICAgICAgICAgICA8Y2lyY2xlIGN4PSI2MCIgY3k9IjYwIiByPSIzNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkY3RjUwIiBzdHJva2Utd2lkdGg9IjEiIG9wYWNpdHk9IjAuMiI+CiAgICAgICAgICAgICAgICAgIDxhbmltYXRlIGF0dHJpYnV0ZU5hbWU9InIiIHZhbHVlcz0iMzU7NjA7MzUiIGR1cj0iNHMiIHJlcGVhdENvdW50PSJpbmRlZmluaXRlIi8+CiAgICAgICAgICAgICAgICAgIDxhbmltYXRlIGF0dHJpYnV0ZU5hbWU9Im9wYWNpdHkiIHZhbHVlcz0iMC4yOzA7MC4yIiBkdXI9IjRzIiByZXBlYXRDb3VudD0iaW5kZWZpbml0ZSIvPgogICAgICAgICAgICAgIDwvY2lyY2xlPgogICAgICAgICAgPC9nPgogICAgICA8L2c+CiAgPC9nPgogIDxjaXJjbGUgY3g9IjYwIiBjeT0iNjAiIHI9IjU1IiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjcXVhbnR1bUdyYWRpZW50KSIgc3Ryb2tlLXdpZHRoPSI0IiBvcGFjaXR5PSIwLjYiLz4KPC9zdmc+
 // ==/UserScript==
 
@@ -104,8 +110,14 @@
     name: "新API配置",
     url: "https://api.openai.com/v1/chat/completions",
     key: "",
-    model: "gpt-4o-mini"
+    model: "gpt-4o-mini",
+    imageInputEnabled: false,
+    imageDetail: "auto",
+    maxImagesPerRequest: 6,
+    maxImageBytes: 4 * 1024 * 1024,
+    maxTotalImageBytes: 12 * 1024 * 1024
   };
+  var IMAGE_DETAIL_OPTIONS = /* @__PURE__ */ new Set(["auto", "low", "high"]);
   var defaultDriveSummarySettings = {
     enabled: false,
     clientId: "",
@@ -142,6 +154,29 @@
     if (Number.isNaN(parsed)) return fallbackValue;
     return Math.min(600, Math.max(1, parsed));
   }
+  function normalizeImageDetail(value, fallback = DEFAULT_API_CONFIGURATION.imageDetail) {
+    const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (IMAGE_DETAIL_OPTIONS.has(normalized)) return normalized;
+    return IMAGE_DETAIL_OPTIONS.has(fallback) ? fallback : DEFAULT_API_CONFIGURATION.imageDetail;
+  }
+  function normalizeMaxImagesPerRequest(value, fallback = DEFAULT_API_CONFIGURATION.maxImagesPerRequest) {
+    const fallbackValue = Number.isFinite(Number(fallback)) ? Math.min(20, Math.max(1, parseInt(fallback, 10))) : DEFAULT_API_CONFIGURATION.maxImagesPerRequest;
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return fallbackValue;
+    return Math.min(20, Math.max(1, parsed));
+  }
+  function normalizeImageByteLimit(value, fallback = DEFAULT_API_CONFIGURATION.maxImageBytes) {
+    const fallbackValue = Number.isFinite(Number(fallback)) ? Math.min(20 * 1024 * 1024, Math.max(256 * 1024, parseInt(fallback, 10))) : DEFAULT_API_CONFIGURATION.maxImageBytes;
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return fallbackValue;
+    return Math.min(20 * 1024 * 1024, Math.max(256 * 1024, parsed));
+  }
+  function normalizeTotalImageByteLimit(value, fallback = DEFAULT_API_CONFIGURATION.maxTotalImageBytes) {
+    const fallbackValue = Number.isFinite(Number(fallback)) ? Math.min(60 * 1024 * 1024, Math.max(256 * 1024, parseInt(fallback, 10))) : DEFAULT_API_CONFIGURATION.maxTotalImageBytes;
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return fallbackValue;
+    return Math.min(60 * 1024 * 1024, Math.max(256 * 1024, parsed));
+  }
   function normalizeApiConfiguration(config, retryFallback = {}) {
     const source = config && typeof config === "object" ? config : {};
     const fallbackRetryCount = normalizeAutoRetryCount(
@@ -158,7 +193,12 @@
       key: source.key === null || source.key === void 0 ? "" : String(source.key),
       model: typeof source.model === "string" && source.model.trim() ? source.model.trim() : DEFAULT_API_CONFIGURATION.model,
       retryCount: normalizeAutoRetryCount(source.retryCount, fallbackRetryCount),
-      retryInterval: normalizeAutoRetryInterval(source.retryInterval, fallbackRetryInterval)
+      retryInterval: normalizeAutoRetryInterval(source.retryInterval, fallbackRetryInterval),
+      imageInputEnabled: source.imageInputEnabled === true,
+      imageDetail: normalizeImageDetail(source.imageDetail),
+      maxImagesPerRequest: normalizeMaxImagesPerRequest(source.maxImagesPerRequest),
+      maxImageBytes: normalizeImageByteLimit(source.maxImageBytes),
+      maxTotalImageBytes: normalizeTotalImageByteLimit(source.maxTotalImageBytes)
     };
   }
   function createDefaultApiConfiguration(overrides = {}, retryFallback = {}) {
@@ -453,9 +493,13 @@
       setSummaryHistoryMap,
       getTopicQuestionHistoryMap,
       setTopicQuestionHistoryMap,
+      getDeArrowTopicStates,
+      setDeArrowTopicStates,
+      normalizeDeArrowTopicStates: normalizeDeArrowTopicStates2,
       syncSummaryTopicIdsFromSources: syncSummaryTopicIdsFromSources2,
       replaceSummaryTopicIdsFromHistoryMap: replaceSummaryTopicIdsFromHistoryMap2,
       markDriveSummaryTopicsDirty: markDriveSummaryTopicsDirty2,
+      markDriveDeArrowDirty: markDriveDeArrowDirty2,
       scheduleDriveSummarySync: scheduleDriveSummarySync2,
       updateAllSummaryButtonsAndContainers,
       syncDriveSummarySettingsUI: syncDriveSummarySettingsUI2,
@@ -476,6 +520,9 @@
     }
     function readTopicQuestionHistory() {
       return typeof getTopicQuestionHistoryMap === "function" ? getTopicQuestionHistoryMap() : {};
+    }
+    function readDeArrowTopicStates() {
+      return typeof getDeArrowTopicStates === "function" ? getDeArrowTopicStates() : {};
     }
     function isPlainObject(value) {
       return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -499,6 +546,16 @@
         throw new Error(`${label}格式无效`);
       }
       return normalizeTopicQuestionHistoryMapForStorage(questionHistory);
+    }
+    function normalizeImportedDeArrowStatesOrThrow(topicStates, label = "DeArrow 状态") {
+      if (!isPlainObject(topicStates)) {
+        throw new Error(`${label}格式无效`);
+      }
+      const hasInvalidTopicEntries = Object.values(topicStates).some((entry) => !isPlainObject(entry));
+      if (hasInvalidTopicEntries) {
+        throw new Error(`${label}格式无效`);
+      }
+      return typeof normalizeDeArrowTopicStates2 === "function" ? normalizeDeArrowTopicStates2(topicStates) : topicStates;
     }
     function writeSummaryHistory(summaryHistory, { preservedTopicIds = [] } = {}) {
       const normalizedSummaryHistory = normalizeSummaryHistoryMapForStorage(summaryHistory);
@@ -527,6 +584,18 @@
       }
       if (typeof markDriveSummaryTopicsDirty2 === "function") {
         markDriveSummaryTopicsDirty2(Object.keys(normalizedQuestionHistory));
+      }
+      if (typeof scheduleDriveSummarySync2 === "function") {
+        scheduleDriveSummarySync2("import");
+      }
+    }
+    function writeDeArrowTopicStates(topicStates) {
+      const normalized = typeof normalizeDeArrowTopicStates2 === "function" ? normalizeDeArrowTopicStates2(topicStates) : topicStates;
+      if (typeof setDeArrowTopicStates === "function") {
+        setDeArrowTopicStates(normalized);
+      }
+      if (typeof markDriveDeArrowDirty2 === "function") {
+        markDriveDeArrowDirty2();
       }
       if (typeof scheduleDriveSummarySync2 === "function") {
         scheduleDriveSummarySync2("import");
@@ -568,7 +637,8 @@
         const bundle = {
           settings: exportSettingsObject(),
           summaryHistory: readSummaryHistory(),
-          topicQuestionHistory: readTopicQuestionHistory()
+          topicQuestionHistory: readTopicQuestionHistory(),
+          dearrowTopicStates: readDeArrowTopicStates()
         };
         downloadJson(bundle, "全部数据 - [LINUX DO] 🌟 主题 & 回复 总结");
         createSettingsToast2?.("全部数据已导出！", "success", 3e3);
@@ -587,8 +657,13 @@
         const normalizedSummaryHistory = hasSummaryHistory ? normalizeImportedSummaryHistoryOrThrow(bundle.summaryHistory) : null;
         const hasTopicQuestionHistory = Object.prototype.hasOwnProperty.call(bundle, "topicQuestionHistory");
         const normalizedQuestionHistory = hasTopicQuestionHistory ? normalizeImportedTopicQuestionHistoryOrThrow(bundle.topicQuestionHistory) : null;
+        const hasDeArrowTopicStates = Object.prototype.hasOwnProperty.call(bundle, "dearrowTopicStates");
+        const normalizedDeArrowTopicStates = hasDeArrowTopicStates ? normalizeImportedDeArrowStatesOrThrow(bundle.dearrowTopicStates) : null;
         if (bundle.settings && typeof importSettings === "function") {
-          importSettings(bundle.settings);
+          const settingsImported = importSettings(bundle.settings);
+          if (settingsImported === false) {
+            throw new Error("脚本设置导入失败");
+          }
         }
         if (normalizedSummaryHistory) {
           writeSummaryHistory(normalizedSummaryHistory, {
@@ -597,6 +672,9 @@
         }
         if (normalizedQuestionHistory) {
           writeTopicQuestionHistory(normalizedQuestionHistory);
+        }
+        if (normalizedDeArrowTopicStates) {
+          writeDeArrowTopicStates(normalizedDeArrowTopicStates);
         }
         createSettingsToast2?.("全部数据导入完成！", "success", 3e3);
       } catch (error) {
@@ -612,7 +690,7 @@
       const section = document.createElement("div");
       section.className = "settings-card drive-summary-section";
       section.innerHTML = `
-            <span class="switch-label">1. Google Drive 总结 / 问答历史：</span>
+            <span class="switch-label">1. Google Drive 总结 / 问答 / DeArrow 数据：</span>
             <p>(同步文件夹：[LINUX DO] 🌟 话题 & 回复 总结)</p>
             <div class="switch-container">
                 <span class="switch-label">自动同步（关/开）</span>
@@ -725,7 +803,7 @@
       const section3 = document.createElement("div");
       section3.className = "import-export-section settings-card";
       section3.innerHTML = `
-            <span class="switch-label">3. 脚本配置 + 已总结内容：</span>
+            <span class="switch-label">3. 脚本配置 + 总结 / 问答 / DeArrow 数据：</span>
             <p>(文件格式：全部数据 - [LINUX DO] 🌟 主题 & 回复 总结_yyyy-mm-dd.json)</p>
             <input type="file" id="import-all-file" accept=".json" style="display:none;">
             <div class="button-group">
@@ -890,10 +968,31 @@
     ].join("\n");
     throw error;
   }
+  function buildUserContentWithImages(text, imageInputs = []) {
+    const normalizedText = text === null || text === void 0 ? "" : String(text);
+    const normalizedImages = Array.isArray(imageInputs) ? imageInputs.map((image) => {
+      const url = typeof image?.url === "string" ? image.url.trim() : "";
+      if (!url) return null;
+      const detail = typeof image?.detail === "string" && image.detail.trim() ? image.detail.trim() : void 0;
+      const imageUrl = detail ? { url, detail } : { url };
+      return {
+        type: "image_url",
+        image_url: imageUrl
+      };
+    }).filter(Boolean) : [];
+    if (normalizedImages.length === 0) {
+      return normalizedText;
+    }
+    return [
+      { type: "text", text: normalizedText },
+      ...normalizedImages
+    ];
+  }
   async function requestSummaryCompletion({
     currentApi,
     promptConfig,
     txt,
+    imageInputs = [],
     fetchImpl = fetch
   }) {
     const systemPrompt = `${promptConfig.summaryMethod}
@@ -902,7 +1001,7 @@ ${promptConfig.outputFormat}`;
       currentApi,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: txt }
+        { role: "user", content: buildUserContentWithImages(txt, imageInputs) }
       ],
       fetchImpl
     });
@@ -1018,6 +1117,309 @@ ${promptConfig.outputFormat}`;
       sidebarTopDistance: importedSettings?.sidebarTopDistance ?? currentSettings.sidebarTopDistance ?? "5%",
       sidebarBottomDistance: importedSettings?.sidebarBottomDistance ?? currentSettings.sidebarBottomDistance ?? "5%"
     };
+  }
+
+  // src/stores/dearrowStore.js
+  var DEFAULT_DEARROW_SCOPE_URL = "https://linux.do/latest?order=created";
+  var DEFAULT_DEARROW_TOP_SCOPE_URL = "https://linux.do/top?ascending=false&order=views";
+  var DEFAULT_DEARROW_SCOPE_URLS = Object.freeze([
+    DEFAULT_DEARROW_SCOPE_URL,
+    DEFAULT_DEARROW_TOP_SCOPE_URL
+  ]);
+  var defaultDeArrowSettings = Object.freeze({
+    dearrowEnabled: false,
+    dearrowJudgmentApiIndex: 0,
+    dearrowRewriteApiIndex: 0,
+    dearrowScopeRules: DEFAULT_DEARROW_SCOPE_URLS
+  });
+  var DEARROW_STATE_FIELDS = Object.freeze({
+    verdict: ["verdict", "verdictReason", "verdictModel", "verdictUpdatedAt"],
+    rewrite: ["rewrittenTitle", "rewriteModel", "rewrittenAt"]
+  });
+  function normalizeString(value) {
+    if (value === null || value === void 0) return "";
+    return String(value).trim();
+  }
+  function normalizeTopicId(value) {
+    return normalizeString(value);
+  }
+  function normalizeTimestamp(value) {
+    const normalized = normalizeString(value);
+    if (!normalized) return "";
+    const timestamp = Date.parse(normalized);
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : "";
+  }
+  function timestampValue(value) {
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  function latestTimestamp(...values) {
+    let latest = "";
+    let latestValue = 0;
+    values.forEach((value) => {
+      const normalized = normalizeTimestamp(value);
+      const parsed = timestampValue(normalized);
+      if (parsed > latestValue || parsed === latestValue && normalized > latest) {
+        latest = normalized;
+        latestValue = parsed;
+      }
+    });
+    return latest;
+  }
+  function escapeRegExp(value) {
+    return String(value).replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+  }
+  function stripHash(value) {
+    const hashIndex = value.indexOf("#");
+    return hashIndex === -1 ? value : value.slice(0, hashIndex);
+  }
+  function parseScopeRule(rule) {
+    const normalized = stripHash(normalizeString(rule));
+    if (!normalized) {
+      return { ok: false, error: "作用范围 URL 不能为空" };
+    }
+    const wildcardMarker = "dearrow-wildcard-placeholder";
+    let parsed;
+    try {
+      parsed = new URL(normalized.replaceAll("*", wildcardMarker));
+    } catch (_2) {
+      return { ok: false, error: `无效的完整 URL：${normalized}` };
+    }
+    if (parsed.protocol !== "https:" || parsed.hostname !== "linux.do" || parsed.port || parsed.username || parsed.password) {
+      return { ok: false, error: `仅支持 https://linux.do 下的 URL：${normalized}` };
+    }
+    parsed.hash = "";
+    return {
+      ok: true,
+      rule: parsed.href.replaceAll(wildcardMarker, "*")
+    };
+  }
+  function validateDeArrowScopeRules(rawRules) {
+    const source = Array.isArray(rawRules) ? rawRules : typeof rawRules === "string" ? rawRules.split(/\r?\n/) : [];
+    const rules = [];
+    const errors = [];
+    const seen = /* @__PURE__ */ new Set();
+    source.forEach((rawRule, index) => {
+      if (!normalizeString(rawRule)) return;
+      const result = parseScopeRule(rawRule);
+      if (!result.ok) {
+        errors.push({ index, rule: normalizeString(rawRule), message: result.error });
+        return;
+      }
+      if (!seen.has(result.rule)) {
+        seen.add(result.rule);
+        rules.push(result.rule);
+      }
+    });
+    if (rules.length === 0 && errors.length === 0) {
+      errors.push({ index: -1, rule: "", message: "至少需要一条作用范围 URL" });
+    }
+    return {
+      valid: errors.length === 0 && rules.length > 0,
+      rules,
+      errors
+    };
+  }
+  function normalizeDeArrowScopeRules(rawRules, fallback = defaultDeArrowSettings.dearrowScopeRules) {
+    const validated = validateDeArrowScopeRules(rawRules);
+    if (validated.valid) return validated.rules;
+    const fallbackValidation = validateDeArrowScopeRules(fallback);
+    return fallbackValidation.valid ? fallbackValidation.rules : [...DEFAULT_DEARROW_SCOPE_URLS];
+  }
+  function normalizeDeArrowApiIndex(value, apiConfigurations2 = []) {
+    const maxIndex = Array.isArray(apiConfigurations2) && apiConfigurations2.length > 0 ? apiConfigurations2.length - 1 : 0;
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > maxIndex) return 0;
+    return parsed;
+  }
+  function normalizeDeArrowSettings(raw = {}, apiConfigurations2 = raw?.apiConfigurations) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    const legacyApiIndex = source.dearrowApiIndex;
+    return {
+      dearrowEnabled: source.dearrowEnabled === true,
+      dearrowJudgmentApiIndex: normalizeDeArrowApiIndex(
+        source.dearrowJudgmentApiIndex ?? legacyApiIndex,
+        apiConfigurations2
+      ),
+      dearrowRewriteApiIndex: normalizeDeArrowApiIndex(
+        source.dearrowRewriteApiIndex ?? legacyApiIndex,
+        apiConfigurations2
+      ),
+      dearrowScopeRules: normalizeDeArrowScopeRules(source.dearrowScopeRules)
+    };
+  }
+  function compileDeArrowScopeRule(rule) {
+    const result = parseScopeRule(rule);
+    if (!result.ok) return null;
+    const pattern = result.rule.split("*").map(escapeRegExp).join(".*");
+    return new RegExp(`^${pattern}$`);
+  }
+  function normalizeDeArrowPageUrl(value) {
+    try {
+      const parsed = new URL(String(value || ""));
+      if (parsed.protocol !== "https:" || parsed.hostname !== "linux.do" || parsed.port) return "";
+      parsed.hash = "";
+      return parsed.href;
+    } catch (_2) {
+      return "";
+    }
+  }
+  function isDeArrowScopeUrl(value, rawRules = defaultDeArrowSettings.dearrowScopeRules) {
+    const normalizedUrl = normalizeDeArrowPageUrl(value);
+    if (!normalizedUrl) return false;
+    const rules = normalizeDeArrowScopeRules(rawRules);
+    return rules.some((rule) => compileDeArrowScopeRule(rule)?.test(normalizedUrl) === true);
+  }
+  function stableSerialize(value) {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return `[${value.map(stableSerialize).join(",")}]`;
+    }
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(",")}}`;
+  }
+  function normalizeDeArrowTopicState(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const originalTitle = normalizeString(raw.originalTitle);
+    if (!originalTitle) return null;
+    const normalized = { originalTitle };
+    if (typeof raw.verdict === "boolean") {
+      normalized.verdict = raw.verdict;
+      const verdictReason = normalizeString(raw.verdictReason ?? raw.reason);
+      const verdictModel = normalizeString(raw.verdictModel);
+      const verdictUpdatedAt = normalizeTimestamp(raw.verdictUpdatedAt);
+      if (verdictReason) normalized.verdictReason = verdictReason;
+      if (verdictModel) normalized.verdictModel = verdictModel;
+      if (verdictUpdatedAt) normalized.verdictUpdatedAt = verdictUpdatedAt;
+    }
+    const rewrittenTitle = normalizeString(raw.rewrittenTitle);
+    if (rewrittenTitle) {
+      normalized.rewrittenTitle = rewrittenTitle;
+      const rewriteModel = normalizeString(raw.rewriteModel ?? raw.rewrittenModel);
+      const rewrittenAt = normalizeTimestamp(raw.rewrittenAt);
+      if (rewriteModel) normalized.rewriteModel = rewriteModel;
+      if (rewrittenAt) normalized.rewrittenAt = rewrittenAt;
+    }
+    const updatedAt = latestTimestamp(
+      raw.updatedAt,
+      normalized.verdictUpdatedAt,
+      normalized.rewrittenAt
+    );
+    if (updatedAt) normalized.updatedAt = updatedAt;
+    return normalized;
+  }
+  function normalizeDeArrowTopicStates(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const normalized = {};
+    Object.entries(raw).forEach(([topicId, state2]) => {
+      const id = normalizeTopicId(topicId);
+      const nextState = normalizeDeArrowTopicState(state2);
+      if (id && nextState) normalized[id] = nextState;
+    });
+    return normalized;
+  }
+  function chooseTimedBundle(left, right, field, bundleFields) {
+    if (!left) return right;
+    if (!right) return left;
+    const leftTime = timestampValue(left?.[field]);
+    const rightTime = timestampValue(right?.[field]);
+    if (leftTime !== rightTime) return rightTime > leftTime ? right : left;
+    const leftBundle = {};
+    const rightBundle = {};
+    bundleFields.forEach((key) => {
+      if (left && Object.hasOwn(left, key)) leftBundle[key] = left[key];
+      if (right && Object.hasOwn(right, key)) rightBundle[key] = right[key];
+    });
+    return stableSerialize(rightBundle) > stableSerialize(leftBundle) ? right : left;
+  }
+  function copyBundle(target, source, fields) {
+    fields.forEach((field) => {
+      if (source && Object.hasOwn(source, field)) target[field] = source[field];
+    });
+  }
+  function mergeDeArrowTopicState(leftRaw, rightRaw) {
+    const left = normalizeDeArrowTopicState(leftRaw);
+    const right = normalizeDeArrowTopicState(rightRaw);
+    if (!left) return right;
+    if (!right) return left;
+    if (left.originalTitle !== right.originalTitle) {
+      const leftTime = timestampValue(left.updatedAt);
+      const rightTime = timestampValue(right.updatedAt);
+      if (leftTime !== rightTime) return rightTime > leftTime ? right : left;
+      return stableSerialize(right) > stableSerialize(left) ? right : left;
+    }
+    const merged = { originalTitle: left.originalTitle };
+    const verdictSource = chooseTimedBundle(
+      typeof left.verdict === "boolean" ? left : null,
+      typeof right.verdict === "boolean" ? right : null,
+      "verdictUpdatedAt",
+      DEARROW_STATE_FIELDS.verdict
+    );
+    const rewriteSource = chooseTimedBundle(
+      left.rewrittenTitle ? left : null,
+      right.rewrittenTitle ? right : null,
+      "rewrittenAt",
+      DEARROW_STATE_FIELDS.rewrite
+    );
+    copyBundle(merged, verdictSource, DEARROW_STATE_FIELDS.verdict);
+    copyBundle(merged, rewriteSource, DEARROW_STATE_FIELDS.rewrite);
+    const updatedAt = latestTimestamp(left.updatedAt, right.updatedAt, merged.verdictUpdatedAt, merged.rewrittenAt);
+    if (updatedAt) merged.updatedAt = updatedAt;
+    return normalizeDeArrowTopicState(merged);
+  }
+  function mergeDeArrowTopicStates(leftRaw, rightRaw) {
+    const left = normalizeDeArrowTopicStates(leftRaw);
+    const right = normalizeDeArrowTopicStates(rightRaw);
+    const merged = { ...left };
+    Object.entries(right).forEach(([topicId, state2]) => {
+      merged[topicId] = mergeDeArrowTopicState(merged[topicId], state2);
+    });
+    return normalizeDeArrowTopicStates(merged);
+  }
+  function updateDeArrowVerdictState(rawState, {
+    originalTitle,
+    verdict,
+    reason = "",
+    model = "",
+    timestamp = (/* @__PURE__ */ new Date()).toISOString()
+  } = {}) {
+    const existing = normalizeDeArrowTopicState(rawState);
+    const title = normalizeString(originalTitle || existing?.originalTitle);
+    if (!title || typeof verdict !== "boolean") return null;
+    const normalizedTimestamp = normalizeTimestamp(timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+    const base = existing?.originalTitle === title ? existing : { originalTitle: title };
+    return normalizeDeArrowTopicState({
+      ...base,
+      originalTitle: title,
+      verdict,
+      verdictReason: normalizeString(reason),
+      verdictModel: normalizeString(model),
+      verdictUpdatedAt: normalizedTimestamp,
+      updatedAt: latestTimestamp(base.updatedAt, normalizedTimestamp)
+    });
+  }
+  function updateDeArrowRewriteState(rawState, {
+    originalTitle,
+    rewrittenTitle,
+    model = "",
+    timestamp = (/* @__PURE__ */ new Date()).toISOString()
+  } = {}) {
+    const existing = normalizeDeArrowTopicState(rawState);
+    const title = normalizeString(originalTitle || existing?.originalTitle);
+    const rewritten = normalizeString(rewrittenTitle);
+    if (!title || !rewritten) return null;
+    const normalizedTimestamp = normalizeTimestamp(timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+    const base = existing?.originalTitle === title ? existing : { originalTitle: title };
+    return normalizeDeArrowTopicState({
+      ...base,
+      originalTitle: title,
+      rewrittenTitle: rewritten,
+      rewriteModel: normalizeString(model),
+      rewrittenAt: normalizedTimestamp,
+      updatedAt: latestTimestamp(base.updatedAt, normalizedTimestamp)
+    });
   }
 
   // node_modules/marked/lib/marked.esm.js
@@ -2297,7 +2699,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         renderMode: getCurrentSummaryRenderMode()
       };
     }
-    function escapeRegExp(value) {
+    function escapeRegExp2(value) {
       return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
     function applySummaryOutputFilters(text) {
@@ -2310,12 +2712,12 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       let output = rawText;
       filterConfig.leadingTokens.forEach((token) => {
         if (!token) return;
-        const pattern = new RegExp(`^\\s*${escapeRegExp(token)}\\s*`, "i");
+        const pattern = new RegExp(`^\\s*${escapeRegExp2(token)}\\s*`, "i");
         output = output.replace(pattern, "");
       });
       filterConfig.trailingTokens.forEach((token) => {
         if (!token) return;
-        const pattern = new RegExp(`\\s*${escapeRegExp(token)}\\s*$`, "i");
+        const pattern = new RegExp(`\\s*${escapeRegExp2(token)}\\s*$`, "i");
         output = output.replace(pattern, "");
       });
       return output;
@@ -2441,6 +2843,26 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     };
   }
 
+  // src/ui/icons.js
+  var ASK_BUTTON_ICON_SVG = `<svg class="ask-button-icon" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <g fill="currentColor" stroke="currentColor" stroke-width="0.5" stroke-linejoin="round">
+    <path d="M17,23h-2v-2h2V23z M17,17.899c2.279-0.464,4-2.485,4-4.899c0-2.757-2.243-5-5-5s-5,2.243-5,5h2c0-1.654,1.346-3,3-3s3,1.346,3,3s-1.346,3-3,3h-1v4h2V17.899z"></path>
+    <path d="M16,2C8.268,2,2,8.268,2,16c0,2.863,0.863,5.522,2.338,7.74L2,29l1,1l5.26-2.338C10.478,29.137,13.137,30,16,30c7.732,0,14-6.268,14-14S23.732,2,16,2z M16,28.923c-2.551,0-5.021-0.746-7.144-2.158l-0.493-0.328l-5.042,2.241l2.241-5.042l-0.328-0.493C3.823,21.021,3.077,18.551,3.077,16C3.077,8.874,8.874,3.077,16,3.077c7.126,0,12.923,5.797,12.923,12.923S23.126,28.923,16,28.923z"></path>
+  </g>
+</svg>`;
+  function renderAskButtonIcon(button, label = "提问 / 追问") {
+    if (!button) return false;
+    const hasIcon = Boolean(button.querySelector?.(".ask-button-icon"));
+    const hasExactMarkup = String(button.innerHTML || "").trim() === ASK_BUTTON_ICON_SVG.trim();
+    if (!hasIcon && !hasExactMarkup) {
+      button.textContent = "";
+      button.innerHTML = ASK_BUTTON_ICON_SVG;
+    }
+    button.title = label;
+    button.setAttribute?.("aria-label", label);
+    return !hasIcon && !hasExactMarkup;
+  }
+
   // src/features/listPage/index.js
   var TOPIC_SUMMARY_VIEW_MODE = Object.freeze({
     SUMMARY: "summary",
@@ -2470,20 +2892,21 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       loadHistoryForCurrentTopic: loadHistoryForCurrentTopic2,
       updateSidebarSubmitButtonState: updateSidebarSubmitButtonState2,
       getFullFloorRangeForTopic,
+      getCurrentApiConfiguration: getCurrentApiConfiguration2,
       main,
       extractTopicIdFromElement: extractTopicIdFromElement2,
       isListSummaryPageUrl: isListSummaryPageUrl2,
       isSummarySelectionLocked: isSummarySelectionLocked2,
       openListQuestionPanel
     } = deps;
-    const LIST_SUMMARY_INTERNAL_SELECTOR = ".topic-summary-row, .topic-summary-container, .topic-summary-button, .topic-question-button, .topic-summary-button-group, .topic-summary-control-button, .topic-summary-history-browser, .topic-summary-history-content, .topic-summary-content, .topic-summary-history-indicator, .topic-question-panel, .topic-question-header, .topic-question-title, .topic-question-presets, .topic-question-preset-button, .topic-question-preset-menu, .topic-question-preset-menu-item, .topic-question-history, .topic-question-compose, .topic-question-input-shell, .topic-question-input, .topic-question-compose-actions, .topic-question-send, .topic-question-status";
+    const LIST_SUMMARY_INTERNAL_SELECTOR = ".topic-summary-row, .topic-summary-container, .topic-summary-button, .topic-dearrow-button, .topic-question-button, .topic-summary-button-group, .topic-summary-control-button, .topic-summary-history-browser, .topic-summary-history-content, .topic-summary-content, .topic-summary-history-indicator, .topic-question-panel, .topic-question-header, .topic-question-title, .topic-question-presets, .topic-question-preset-button, .topic-question-preset-menu, .topic-question-preset-menu-item, .topic-question-history, .topic-question-compose, .topic-question-input-shell, .topic-question-input, .topic-question-compose-actions, .topic-question-send, .topic-question-status";
     const LIST_SUMMARY_TOPIC_CONTAINER_SELECTOR = ".topic-list, .topic-list-body, .topic-list-item";
     let listSummaryRefreshTimer = null;
     let listSummaryPostRenderTimer = null;
     const topicSummaryViewModeByTopic = /* @__PURE__ */ new Map();
     const topicSummaryHistoryCursorByTopic = /* @__PURE__ */ new Map();
     const listDriveHistoryPullingTopics = /* @__PURE__ */ new Set();
-    function normalizeTopicId2(topicId) {
+    function normalizeTopicId4(topicId) {
       if (topicId === null || topicId === void 0) return "";
       return String(topicId).trim();
     }
@@ -2625,6 +3048,7 @@ ${error.stack}`);
     function isSoftHidden(elem) {
       if (!elem) return false;
       const cs = getComputedStyle(elem);
+      if (cs.display === "none") return true;
       if (cs.visibility === "collapse" || cs.visibility === "hidden") return true;
       if (cs.position === "absolute") {
         const left = parseInt(cs.left, 10);
@@ -2653,7 +3077,7 @@ ${error.stack}`);
       return true;
     }
     function getTopicSummaryState(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       const hasLocalHistory = normalizedTopicId ? getSummaryHistory2(normalizedTopicId).length > 0 : false;
       const hasSummaryState = normalizedTopicId ? hasLocalHistory || isTopicMarkedSummarized2(normalizedTopicId) : false;
       return {
@@ -2663,12 +3087,12 @@ ${error.stack}`);
       };
     }
     function isTopicDrivePulling(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return false;
       return listDriveHistoryPullingTopics.has(normalizedTopicId);
     }
     function isTopicSummaryBusy(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return false;
       return state2.summarizingTopics.has(normalizedTopicId) || listDriveHistoryPullingTopics.has(normalizedTopicId);
     }
@@ -2682,7 +3106,7 @@ ${error.stack}`);
       return isTopicDrivePulling(topicId) ? "该话题正在从 Drive 拉取总结，请稍候..." : "该话题正在总结中，请稍候...";
     }
     function renderTopicSummaryError(container, buttonGroup, topicId, error, options = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !normalizedTopicId) return false;
       const { contentWrapper, historyBrowser } = ensureTopicSummaryContentElements(container, buttonGroup);
       if (!contentWrapper) return false;
@@ -2729,19 +3153,19 @@ ${error.stack}`);
       return didUpdate;
     }
     function shouldPreservePendingExpandedTopic(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return false;
       return getTopicSummaryViewMode(normalizedTopicId) === TOPIC_SUMMARY_VIEW_MODE.QUESTION || isTopicSummaryBusy(normalizedTopicId) || getSummaryHistory2(normalizedTopicId).length > 0;
     }
     function getTrackedExpandedTopicId() {
       const first = state2.expandedSummaryRows.values().next();
       if (first.done) return null;
-      const topicId = normalizeTopicId2(first.value);
+      const topicId = normalizeTopicId4(first.value);
       return topicId || null;
     }
     function setTrackedExpandedTopicId(topicId) {
       state2.expandedSummaryRows.clear();
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (normalized) {
         state2.expandedSummaryRows.add(normalized);
       }
@@ -2751,13 +3175,13 @@ ${error.stack}`);
       return mode === TOPIC_SUMMARY_VIEW_MODE.HISTORY ? TOPIC_SUMMARY_VIEW_MODE.HISTORY : TOPIC_SUMMARY_VIEW_MODE.SUMMARY;
     }
     function getTopicSummaryViewMode(topicId) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return TOPIC_SUMMARY_VIEW_MODE.SUMMARY;
       const mode = topicSummaryViewModeByTopic.get(normalized);
       return normalizeTopicSummaryViewMode(mode);
     }
     function setTopicSummaryViewMode(topicId, mode) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return TOPIC_SUMMARY_VIEW_MODE.SUMMARY;
       const normalizedMode = normalizeTopicSummaryViewMode(mode);
       topicSummaryViewModeByTopic.set(normalized, normalizedMode);
@@ -2777,7 +3201,7 @@ ${error.stack}`);
       });
     }
     function getTopicHistoryCursor(topicId, maxLength) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return 0;
       const raw = topicSummaryHistoryCursorByTopic.get(normalized);
       if (!Number.isFinite(raw)) return 0;
@@ -2786,7 +3210,7 @@ ${error.stack}`);
       return Math.max(0, Math.min(maxIndex, raw));
     }
     function setTopicHistoryCursor(topicId, index, maxLength) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return 0;
       if (!Number.isFinite(maxLength) || maxLength <= 0) {
         topicSummaryHistoryCursorByTopic.delete(normalized);
@@ -2804,7 +3228,7 @@ ${error.stack}`);
       historyBtn.classList.toggle("active", isHistoryVisible);
     }
     function syncTopicQuestionButtonState(topicId, isQuestionVisible) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return;
       const questionButton = document.querySelector(`.topic-question-button[data-topic-id="${normalizedTopicId}"]`);
       if (!questionButton) return;
@@ -2869,7 +3293,7 @@ ${error.stack}`);
       };
     }
     function getTopicSummaryElements(topicId) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) {
         return {
           topicId: "",
@@ -2894,8 +3318,34 @@ ${error.stack}`);
         questionButton
       };
     }
+    function isDisplayed(element) {
+      if (!element) return false;
+      const inlineDisplay = String(element.style?.display || "").trim();
+      if (inlineDisplay) {
+        return inlineDisplay !== "none";
+      }
+      if (typeof getComputedStyle === "function") {
+        return getComputedStyle(element).display !== "none";
+      }
+      return true;
+    }
+    function isSummaryRowExpandedByTopicId(topicId) {
+      const { summaryRow, container, buttonGroup } = getTopicSummaryElements(topicId);
+      return isDisplayed(summaryRow) && isDisplayed(container) && isDisplayed(buttonGroup);
+    }
+    function getTopicSummaryContentState(contentWrapper) {
+      const currentHtml = String(contentWrapper?.innerHTML || "").trim();
+      if (!currentHtml) return "empty";
+      if (contentWrapper?.querySelector?.(".loading-indicator") || currentHtml.includes("loading-indicator")) {
+        return "loading";
+      }
+      if (contentWrapper?.querySelector?.(".error-message") || currentHtml.includes("error-message")) {
+        return "error";
+      }
+      return "ready";
+    }
     function collapseTopicSummaryView(topicId, options = {}) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return false;
       const clearTracking = options.clearTracking !== false;
       const { summaryRow, container, buttonGroup, button, questionButton } = getTopicSummaryElements(normalized);
@@ -2916,23 +3366,23 @@ ${error.stack}`);
       return true;
     }
     function collapseAllTopicSummaryViewsExcept(topicId = null, options = {}) {
-      const keepTopicId = normalizeTopicId2(topicId);
+      const keepTopicId = normalizeTopicId4(topicId);
       const preserveTracking = options.preserveTracking === true;
       const summaryRows = document.querySelectorAll(".topic-summary-row[data-topic-id]");
       summaryRows.forEach((summaryRow) => {
-        const rowTopicId = normalizeTopicId2(summaryRow.dataset.topicId);
+        const rowTopicId = normalizeTopicId4(summaryRow.dataset.topicId);
         if (!rowTopicId || keepTopicId && rowTopicId === keepTopicId) return;
         collapseTopicSummaryView(rowTopicId, { clearTracking: false });
       });
       const summaryButtons = document.querySelectorAll(".topic-summary-button[data-topic-id]");
       summaryButtons.forEach((button) => {
-        const buttonTopicId = normalizeTopicId2(button.dataset.topicId);
+        const buttonTopicId = normalizeTopicId4(button.dataset.topicId);
         if (!buttonTopicId || keepTopicId && buttonTopicId === keepTopicId) return;
         button.dataset.expanded = "false";
       });
       const questionButtons = document.querySelectorAll(".topic-question-button[data-topic-id]");
       questionButtons.forEach((button) => {
-        const buttonTopicId = normalizeTopicId2(button.dataset.topicId);
+        const buttonTopicId = normalizeTopicId4(button.dataset.topicId);
         if (!buttonTopicId || keepTopicId && buttonTopicId === keepTopicId) return;
         button.dataset.expanded = "false";
         button.classList.remove("active");
@@ -2944,7 +3394,7 @@ ${error.stack}`);
       }
     }
     function expandTopicSummaryView(topicId, options = {}) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return false;
       const closeOthers = options.closeOthers !== false;
       const track = options.track !== false;
@@ -2969,7 +3419,7 @@ ${error.stack}`);
       return true;
     }
     function expandSummaryRowByTopicId2(topicId, options = {}) {
-      const normalized = normalizeTopicId2(topicId);
+      const normalized = normalizeTopicId4(topicId);
       if (!normalized) return false;
       if (!expandTopicSummaryView(normalized, {
         closeOthers: true,
@@ -2982,33 +3432,48 @@ ${error.stack}`);
         options.preferredMode || getTopicSummaryViewMode(normalized)
       );
       if (preferredMode === TOPIC_SUMMARY_VIEW_MODE.QUESTION) {
-        const { container, buttonGroup } = getTopicSummaryElements(normalized);
-        if (container && buttonGroup) {
-          showTopicQuestionPanel(container, buttonGroup, normalized, { focus: false });
+        const { container: container2, buttonGroup: buttonGroup2 } = getTopicSummaryElements(normalized);
+        if (container2 && buttonGroup2) {
+          showTopicQuestionPanel(container2, buttonGroup2, normalized, { focus: false });
           return true;
         }
       }
+      const { container, buttonGroup } = getTopicSummaryElements(normalized);
       if (isTopicSummaryBusy(normalized)) {
-        const { container, buttonGroup } = getTopicSummaryElements(normalized);
         if (container && buttonGroup) {
-          showTopicSummaryLoading(
-            container,
-            buttonGroup,
-            normalized,
-            getTopicSummaryBusyLoadingMessage(normalized)
-          );
+          const contentWrapper2 = container.querySelector(".topic-summary-content");
+          if (getTopicSummaryContentState(contentWrapper2) !== "loading") {
+            showTopicSummaryLoading(
+              container,
+              buttonGroup,
+              normalized,
+              getTopicSummaryBusyLoadingMessage(normalized)
+            );
+          }
         }
+        return true;
+      }
+      if (!container || !buttonGroup) {
+        return true;
+      }
+      const contentWrapper = container.querySelector(".topic-summary-content");
+      const contentState = getTopicSummaryContentState(contentWrapper);
+      if (contentState === "error") {
+        return true;
+      }
+      if (contentState === "ready" && preferredMode !== TOPIC_SUMMARY_VIEW_MODE.HISTORY) {
+        applyTopicSummaryViewMode(container, buttonGroup, normalized, preferredMode, {
+          historyList: []
+        });
         return true;
       }
       const history = getSummaryHistory2(normalized);
       if (history.length > 0) {
-        const { container, buttonGroup } = getTopicSummaryElements(normalized);
-        if (container && buttonGroup) {
-          const contentWrapper = container.querySelector(".topic-summary-content");
-          const currentHtml = String(contentWrapper?.innerHTML || "").trim();
-          if (currentHtml.includes("error-message")) {
-            return true;
-          }
+        if (contentState === "ready") {
+          applyTopicSummaryViewMode(container, buttonGroup, normalized, preferredMode, {
+            historyList: history
+          });
+        } else {
           showTopicSummary(container, buttonGroup, history[0].summary, normalized, {
             preferredMode,
             historyList: history
@@ -3019,13 +3484,12 @@ ${error.stack}`);
     }
     function cleanupTopicListSummaryItem(item) {
       if (!item) return;
-      const summaryButton = item.querySelector(".topic-summary-button");
-      if (summaryButton) summaryButton.remove();
-      const questionButton = item.querySelector(".topic-question-button");
-      if (questionButton) questionButton.remove();
-      const nextRow = item.nextElementSibling;
-      if (nextRow && nextRow.classList.contains("topic-summary-row")) {
+      Array.from(item.querySelectorAll?.(".topic-summary-button") || []).forEach((button) => button.remove());
+      Array.from(item.querySelectorAll?.(".topic-question-button") || []).forEach((button) => button.remove());
+      let nextRow = item.nextElementSibling;
+      while (nextRow?.classList?.contains?.("topic-summary-row")) {
         nextRow.remove();
+        nextRow = item.nextElementSibling;
       }
       item.classList.remove("has-summary-button");
       item.classList.remove("has-question-button");
@@ -3096,6 +3560,22 @@ ${error.stack}`);
       item.parentNode.insertBefore(summaryRow, item.nextSibling);
       return { summaryRow, summaryContainer, buttonGroup };
     }
+    function getTopicListButtonMountTarget(item) {
+      if (!item) return null;
+      const mainLink = item.querySelector(".main-link") || item.querySelector("td:nth-child(2)");
+      if (item.classList?.contains("bookmark-list-item")) {
+        return item.querySelector(".link-bottom-line") || mainLink || item;
+      }
+      return mainLink || item;
+    }
+    function mountTopicListButton(item, button) {
+      const mountTarget = getTopicListButtonMountTarget(item);
+      if (item?.classList?.contains("bookmark-list-item") && button?.classList?.contains("topic-summary-button") && button.parentNode?.classList?.contains("topic-dearrow-control-stack")) {
+        return;
+      }
+      if (!mountTarget || !button || button.parentNode === mountTarget) return;
+      mountTarget.appendChild(button);
+    }
     function setTopicSummaryButtonBusyState(button, label) {
       if (!button) return null;
       button.disabled = true;
@@ -3157,22 +3637,22 @@ ${error.stack}`);
           return;
         }
         const rawTopicId = extractTopicIdFromElement2(item);
-        const topicId = normalizeTopicId2(rawTopicId);
+        const topicId = normalizeTopicId4(rawTopicId);
         if (!topicId) {
           cleanupTopicListSummaryItem(item);
           return;
         }
         topicIdsOnPage.add(topicId);
-        let summaryButton = item.querySelector(".topic-summary-button");
-        if (summaryButton && summaryButton.dataset.topicId !== topicId) {
-          summaryButton.remove();
-          summaryButton = null;
-        }
-        let questionButton = item.querySelector(".topic-question-button");
-        if (questionButton && questionButton.dataset.topicId !== topicId) {
-          questionButton.remove();
-          questionButton = null;
-        }
+        const existingSummaryButtons = Array.from(item.querySelectorAll?.(".topic-summary-button") || []);
+        let summaryButton = existingSummaryButtons.find((button) => button.dataset?.topicId === topicId) || null;
+        existingSummaryButtons.forEach((button) => {
+          if (button !== summaryButton) button.remove();
+        });
+        const existingQuestionButtons = Array.from(item.querySelectorAll?.(".topic-question-button") || []);
+        let questionButton = existingQuestionButtons.find((button) => button.dataset?.topicId === topicId) || null;
+        existingQuestionButtons.forEach((button) => {
+          if (button !== questionButton) button.remove();
+        });
         const history = getSummaryHistory2(topicId);
         const hasLocalHistory = history.length > 0;
         const hasSummaryState = hasLocalHistory || isTopicMarkedSummarized2(topicId);
@@ -3185,52 +3665,44 @@ ${error.stack}`);
           summaryButton.dataset.expanded = "false";
           summaryButton.addEventListener("click", (e) => {
             e.preventDefault();
-            const activeTopicId = normalizeTopicId2(summaryButton.dataset.topicId);
+            const activeTopicId = normalizeTopicId4(summaryButton.dataset.topicId);
             if (!activeTopicId) return;
             const { summaryRow: summaryRow2, container, buttonGroup: buttonGroup2 } = getTopicSummaryElements(activeTopicId);
             if (summaryRow2 && container && buttonGroup2) {
               handleTopicSummaryButtonClick(summaryButton, container, buttonGroup2, activeTopicId, summaryRow2);
             }
           });
-          const bottomLine = item.querySelector(".link-bottom-line");
-          const titleContainer = item.querySelector(".main-link") || item.querySelector("td:nth-child(2)");
-          const insertTarget = bottomLine || titleContainer || item;
-          insertTarget.appendChild(summaryButton);
         } else {
           summaryButton.dataset.topicId = topicId;
           if (!summaryButton.dataset.expanded) {
             summaryButton.dataset.expanded = "false";
           }
         }
+        mountTopicListButton(item, summaryButton);
         if (!questionButton) {
           questionButton = document.createElement("button");
           questionButton.className = "topic-question-button";
           questionButton.dataset.topicId = topicId;
           questionButton.dataset.expanded = "false";
-          questionButton.textContent = "?";
-          questionButton.title = "提问 / 追问";
+          renderAskButtonIcon(questionButton);
           questionButton.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const activeTopicId = normalizeTopicId2(questionButton.dataset.topicId);
+            const activeTopicId = normalizeTopicId4(questionButton.dataset.topicId);
             if (!activeTopicId) return;
             const { summaryRow: summaryRow2, container, buttonGroup: buttonGroup2 } = getTopicSummaryElements(activeTopicId);
             if (summaryRow2 && container && buttonGroup2) {
               handleTopicQuestionButtonClick(questionButton, container, buttonGroup2, activeTopicId, summaryRow2);
             }
           });
-          const bottomLine = item.querySelector(".link-bottom-line");
-          const titleContainer = item.querySelector(".main-link") || item.querySelector("td:nth-child(2)");
-          const insertTarget = bottomLine || titleContainer || item;
-          insertTarget.appendChild(questionButton);
         } else {
           questionButton.dataset.topicId = topicId;
-          questionButton.textContent = "?";
-          questionButton.title = "提问 / 追问";
+          renderAskButtonIcon(questionButton);
           if (!questionButton.dataset.expanded) {
             questionButton.dataset.expanded = "false";
           }
         }
+        mountTopicListButton(item, questionButton);
         summaryButton.disabled = isBusy;
         if (isBusy) {
           summaryButton.classList.add("loading");
@@ -3340,7 +3812,7 @@ ${error.stack}`);
       scheduleListSummaryPostRenderTasks();
     }
     async function silentlyMergeTopicHistoryFromDrive(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId || !canAttemptDrivePull() || typeof pullTopicHistoryFromDrive2 !== "function") {
         return { ok: false, skipped: true, reason: "drive-unavailable", history: [] };
       }
@@ -3377,7 +3849,7 @@ ${error.stack}`);
       }
     }
     async function handleTopicSummaryButtonClick(button, container, buttonGroup, topicId, summaryRow) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!button || !container || !buttonGroup || !summaryRow || !normalizedTopicId) return;
       const isExpanded = getTrackedExpandedTopicId() === normalizedTopicId && getComputedStyle(summaryRow).display !== "none";
       if (isExpanded && !pendingManualAfterDriveFailTopics2.has(normalizedTopicId)) {
@@ -3485,11 +3957,18 @@ ${error.stack}`);
       );
       const summarizingToast = createSummarizingToast2(normalizedTopicId);
       const requestContext = captureCurrentSummaryRequestContext2();
+      const operationApi = {
+        ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
+      };
       state2.summarizingTopics.add(normalizedTopicId);
       updateSidebarSubmitButtonState2(normalizedTopicId);
       try {
-        const { startFloor, endFloor } = await getFullFloorRangeForTopic(normalizedTopicId);
-        const summary = await main(normalizedTopicId, startFloor, endFloor);
+        const { startFloor, endFloor } = await getFullFloorRangeForTopic(
+          normalizedTopicId,
+          void 0,
+          operationApi
+        );
+        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi);
         summarizingToast.changeType("success");
         summarizingToast.update("总结生成成功！");
         saveSummaryHistory2(normalizedTopicId, summary, requestContext.model, requestContext);
@@ -3532,7 +4011,7 @@ ${error.stack}`);
       }
     }
     function handleTopicQuestionButtonClick(button, container, buttonGroup, topicId, summaryRow) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!button || !container || !buttonGroup || !summaryRow || !normalizedTopicId) return;
       const isQuestionExpanded = getTopicSummaryViewMode(normalizedTopicId) === TOPIC_SUMMARY_VIEW_MODE.QUESTION && getComputedStyle(summaryRow).display !== "none";
       if (isQuestionExpanded) {
@@ -3563,7 +4042,7 @@ ${error.stack}`);
       }
       const buttons = document.querySelectorAll(".topic-summary-button[data-topic-id]");
       for (const button of buttons) {
-        const topicId = normalizeTopicId2(button.dataset.topicId);
+        const topicId = normalizeTopicId4(button.dataset.topicId);
         if (!topicId) continue;
         if (isTopicSummaryBusy(topicId)) continue;
         if (getSummaryHistory2(topicId).length === 0) continue;
@@ -3575,7 +4054,7 @@ ${error.stack}`);
       });
     }
     function applyTopicSummaryViewMode(container, buttonGroup, topicId, mode, options = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !buttonGroup || !normalizedTopicId) {
         return TOPIC_SUMMARY_VIEW_MODE.SUMMARY;
       }
@@ -3615,7 +4094,7 @@ ${error.stack}`);
       return setTopicSummaryViewMode(normalizedTopicId, TOPIC_SUMMARY_VIEW_MODE.SUMMARY);
     }
     function showTopicSummary(container, buttonGroup, summary, topicId, options = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !buttonGroup || !normalizedTopicId) return;
       const { contentWrapper } = ensureTopicSummaryContentElements(container, buttonGroup);
       if (!contentWrapper) return;
@@ -3637,7 +4116,7 @@ ${error.stack}`);
       });
     }
     function showTopicQuestionPanel(container, buttonGroup, topicId, options = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !buttonGroup || !normalizedTopicId) return null;
       if (typeof openListQuestionPanel !== "function") return null;
       const panel = openListQuestionPanel({
@@ -3656,7 +4135,7 @@ ${error.stack}`);
       return panel;
     }
     function showTopicSummaryLoading(container, buttonGroup, topicId, message = "正在生成总结，请稍候...") {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !buttonGroup || !normalizedTopicId) return false;
       const { contentWrapper } = ensureTopicSummaryContentElements(container, buttonGroup);
       if (!contentWrapper) return false;
@@ -3677,7 +4156,7 @@ ${error.stack}`);
       return true;
     }
     async function toggleHistoryBrowser(container, historyButton, topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !historyButton || !normalizedTopicId) return;
       const buttonGroup = container.querySelector(".topic-summary-button-group");
       if (!buttonGroup) return;
@@ -3764,7 +4243,7 @@ ${error.stack}`);
       historyBrowser.appendChild(historyContent);
     }
     async function refreshTopicSummary(container, topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!container || !normalizedTopicId) return;
       const buttonGroup = container.querySelector(".topic-summary-button-group");
       if (state2.summarizingTopics.has(normalizedTopicId)) {
@@ -3803,11 +4282,18 @@ ${error.stack}`);
       }
       const summarizingToast = createSummarizingToast2(normalizedTopicId);
       const requestContext = captureCurrentSummaryRequestContext2();
+      const operationApi = {
+        ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
+      };
       state2.summarizingTopics.add(normalizedTopicId);
       updateSidebarSubmitButtonState2(normalizedTopicId);
       try {
-        const { startFloor, endFloor } = await getFullFloorRangeForTopic(normalizedTopicId);
-        const summary = await main(normalizedTopicId, startFloor, endFloor);
+        const { startFloor, endFloor } = await getFullFloorRangeForTopic(
+          normalizedTopicId,
+          void 0,
+          operationApi
+        );
+        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi);
         summarizingToast.changeType("success");
         summarizingToast.update("总结更新成功！");
         saveSummaryHistory2(normalizedTopicId, summary, requestContext.model, requestContext);
@@ -3853,15 +4339,20 @@ ${error.stack}`);
       const preserveExpanded = options.preserveExpanded === true;
       const preserveViewState = options.preserveViewState === true || preserveExpanded;
       const summaryButtons = document.querySelectorAll(".topic-summary-button");
+      const questionButtons = document.querySelectorAll(".topic-question-button");
       const summaryRows = document.querySelectorAll(".topic-summary-row");
       summaryButtons.forEach((button) => {
+        button.remove();
+      });
+      questionButtons.forEach((button) => {
         button.remove();
       });
       summaryRows.forEach((row) => {
         row.remove();
       });
-      document.querySelectorAll(".topic-list-item.has-summary-button").forEach((item) => {
+      document.querySelectorAll(".topic-list-item").forEach((item) => {
         item.classList.remove("has-summary-button");
+        item.classList.remove("has-question-button");
         item.classList.remove("has-summary");
       });
       if (!preserveExpanded) {
@@ -3886,7 +4377,7 @@ ${error.stack}`);
         `;
     }
     function updateTopicSummaryButtons(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       const buttons = document.querySelectorAll(`.topic-summary-button[data-topic-id="${normalizedTopicId}"]`);
       if (!buttons.length) return;
       const { hasSummaryState } = getTopicSummaryState(normalizedTopicId);
@@ -3951,7 +4442,7 @@ ${error.stack}`);
       const topicIds = /* @__PURE__ */ new Set();
       let autoExpandCandidateTopicId = null;
       buttons.forEach((button) => {
-        const topicId = normalizeTopicId2(button.dataset.topicId);
+        const topicId = normalizeTopicId4(button.dataset.topicId);
         if (!topicId) return;
         if (topicIds.has(topicId)) return;
         topicIds.add(topicId);
@@ -3990,28 +4481,33 @@ ${error.stack}`);
         });
       }
     }
-    function getRenderableTopicIdsFromList() {
-      const topicIds = /* @__PURE__ */ new Set();
-      const topicItems = document.querySelectorAll(".topic-list-item");
-      topicItems.forEach((item) => {
-        if (isSoftHidden(item)) return;
-        const topicId = extractTopicIdFromElement2(item);
-        const normalized = topicId === null || topicId === void 0 ? "" : String(topicId).trim();
-        if (normalized) topicIds.add(normalized);
-      });
-      return topicIds;
-    }
     function hasListSummaryButtonsCoverage2() {
       if (!state2.listPageSummaryEnabled || !isListSummaryPageUrl2(state2.currentPageUrl)) return true;
-      const topicIds = getRenderableTopicIdsFromList();
-      if (topicIds.size === 0) return false;
-      const buttonIds = new Set(
-        Array.from(document.querySelectorAll(".topic-summary-button[data-topic-id]")).map((button) => String(button.dataset.topicId || "").trim()).filter(Boolean)
-      );
-      for (const topicId of topicIds) {
-        if (!buttonIds.has(topicId)) return false;
-      }
-      return true;
+      const topicItems = Array.from(document.querySelectorAll(".topic-list-item")).filter((item) => !isSoftHidden(item));
+      if (topicItems.length === 0) return false;
+      return topicItems.every((item) => {
+        const topicId = normalizeTopicId4(extractTopicIdFromElement2(item));
+        if (!topicId) return false;
+        const summaryButtons = Array.from(item.querySelectorAll?.(".topic-summary-button") || []);
+        const questionButtons = Array.from(item.querySelectorAll?.(".topic-question-button") || []);
+        if (summaryButtons.length !== 1 || questionButtons.length !== 1) return false;
+        const summaryButton = summaryButtons[0];
+        const questionButton = questionButtons[0];
+        if (normalizeTopicId4(summaryButton.dataset?.topicId) !== topicId || normalizeTopicId4(questionButton.dataset?.topicId) !== topicId) {
+          return false;
+        }
+        if (!item.classList?.contains?.("has-summary-button") || !item.classList?.contains?.("has-question-button")) {
+          return false;
+        }
+        const mountTarget = getTopicListButtonMountTarget(item);
+        const summaryInBookmarkStack = item.classList?.contains?.("bookmark-list-item") && summaryButton.parentNode?.classList?.contains?.("topic-dearrow-control-stack");
+        if (!mountTarget || !summaryInBookmarkStack && summaryButton.parentNode !== mountTarget) return false;
+        if (questionButton.parentNode !== mountTarget) return false;
+        const summaryRow = item.nextElementSibling;
+        return Boolean(
+          summaryRow?.classList?.contains?.("topic-summary-row") && normalizeTopicId4(summaryRow.dataset?.topicId) === topicId
+        );
+      });
     }
     function shouldIgnoreListSummaryMutationNode(node) {
       if (!node || node.nodeType !== 1) return true;
@@ -4039,6 +4535,16 @@ ${error.stack}`);
     function shouldRefreshListSummaryFromMutations2(mutations) {
       if (!state2.listPageSummaryEnabled || !isListSummaryPageUrl2(state2.currentPageUrl)) return false;
       for (const mutation of mutations) {
+        if (mutation.type === "attributes" && mutation.attributeName === "class") {
+          const item = mutation.target;
+          if (!item?.matches?.(".topic-list-item")) continue;
+          const hasSummaryButton = Boolean(item.querySelector?.(".topic-summary-button"));
+          const hasQuestionButton = Boolean(item.querySelector?.(".topic-question-button"));
+          if (hasSummaryButton !== item.classList?.contains?.("has-summary-button") || hasQuestionButton !== item.classList?.contains?.("has-question-button")) {
+            return true;
+          }
+          continue;
+        }
         if (mutation.type !== "childList") continue;
         if (!mutation.addedNodes.length && !mutation.removedNodes.length) continue;
         if (!mutationTouchesTopicList(mutation)) continue;
@@ -4060,6 +4566,7 @@ ${error.stack}`);
       updateAllSummaryButtonsAndContainers,
       scheduleListSummaryRefresh: scheduleListSummaryRefresh2,
       expandSummaryRowByTopicId: expandSummaryRowByTopicId2,
+      isSummaryRowExpandedByTopicId,
       restoreExpandedSummaryRows,
       removeTopicListSummaryButtons: removeTopicListSummaryButtons2,
       updateTopicSummaryButtons,
@@ -4077,11 +4584,15 @@ ${error.stack}`);
       getQuestionHistory,
       getQuestionPromptPresets: getQuestionPromptPresets2,
       askTopicQuestion: askTopicQuestion2,
+      getCurrentApiConfiguration: getCurrentApiConfiguration2,
+      normalizeAutoRetryCount: normalizeAutoRetryCount2,
+      normalizeAutoRetryInterval: normalizeAutoRetryInterval2,
+      waitForRetry,
       pullTopicQuestionHistoryFromDrive: pullTopicQuestionHistoryFromDrive2,
       setQuestionHtml
     } = deps;
     const activePanelsByTopic = /* @__PURE__ */ new Map();
-    function normalizeTopicId2(topicId) {
+    function normalizeTopicId4(topicId) {
       if (topicId === null || topicId === void 0) return "";
       return String(topicId).trim();
     }
@@ -4116,7 +4627,7 @@ ${error.stack}`);
     }
     function renderQuestionHistory(panel) {
       if (!panel) return;
-      const topicId = normalizeTopicId2(panel.dataset.topicId);
+      const topicId = normalizeTopicId4(panel.dataset.topicId);
       const historyEl = panel.querySelector(".topic-question-history");
       if (!historyEl || !topicId) return;
       const history = typeof getQuestionHistory === "function" ? getQuestionHistory(topicId) : [];
@@ -4211,6 +4722,70 @@ ${error.stack}`);
         sendButton.textContent = isLoading ? "等待回复" : sendButtonLabel;
       }
     }
+    function normalizeFallbackRetryNumber(value, fallback = 0) {
+      const parsedFallback = parseInt(fallback, 10);
+      const normalizedFallback = Number.isNaN(parsedFallback) ? 0 : Math.max(0, parsedFallback);
+      const parsed = parseInt(value, 10);
+      if (Number.isNaN(parsed)) return normalizedFallback;
+      return Math.max(0, parsed);
+    }
+    function getQuestionRetrySettings() {
+      const currentConfig = typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : null;
+      const fallbackRetryCount = state2?.autoRetryCount ?? 0;
+      const fallbackRetryInterval = state2?.autoRetryInterval ?? 0;
+      const retryCountSource = currentConfig?.retryCount ?? fallbackRetryCount;
+      const retryIntervalSource = currentConfig?.retryInterval ?? fallbackRetryInterval;
+      const retryCount = typeof normalizeAutoRetryCount2 === "function" ? normalizeAutoRetryCount2(retryCountSource, fallbackRetryCount) : normalizeFallbackRetryNumber(retryCountSource, fallbackRetryCount);
+      const retryInterval = typeof normalizeAutoRetryInterval2 === "function" ? normalizeAutoRetryInterval2(retryIntervalSource, fallbackRetryInterval) : normalizeFallbackRetryNumber(retryIntervalSource, fallbackRetryInterval);
+      if (state2 && retryCount > 0) {
+        state2.autoRetryCount = retryCount;
+        state2.autoRetryInterval = retryInterval;
+      }
+      return {
+        retryCount,
+        retryInterval
+      };
+    }
+    function isNonRetryableQuestionError(error) {
+      if (!error || typeof error !== "object") return false;
+      return error.retryable === false || error.code === "CONTENT_FILTER_BLOCKED";
+    }
+    function waitBeforeRetry(seconds) {
+      if (typeof waitForRetry === "function") {
+        return waitForRetry(seconds);
+      }
+      return new Promise((resolve) => setTimeout(resolve, Math.max(0, seconds) * 1e3));
+    }
+    async function askTopicQuestionWithRetry({ panel, topicId, question, preset }) {
+      let retryAttempt = 0;
+      while (true) {
+        try {
+          return await askTopicQuestion2({
+            topicId,
+            question,
+            preset
+          });
+        } catch (error) {
+          const { retryCount, retryInterval } = getQuestionRetrySettings();
+          if (!isNonRetryableQuestionError(error) && retryAttempt < retryCount) {
+            const message = `提问失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`;
+            setPanelStatus(panel, message, "warning");
+            if (typeof createToast2 === "function") {
+              createToast2(message, "warning", null, topicId);
+            }
+            retryAttempt += 1;
+            await waitBeforeRetry(retryInterval);
+            continue;
+          }
+          if (isNonRetryableQuestionError(error) || retryCount <= 0) {
+            throw error;
+          }
+          const finalError = new Error(`提问失败，已达到最大重试次数 (${retryCount + 1})。错误: ${error.message}`);
+          finalError.cause = error;
+          throw finalError;
+        }
+      }
+    }
     function syncSidebarQuestionButtonState(isActive) {
       const questionButton = document.getElementById("question-button");
       if (!questionButton) return;
@@ -4218,7 +4793,7 @@ ${error.stack}`);
       questionButton.dataset.expanded = isActive ? "true" : "false";
     }
     async function refreshQuestionHistoryFromDrive(panel, topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId || typeof pullTopicQuestionHistoryFromDrive2 !== "function") return;
       if (!state2?.driveSummarySettings?.enabled) return;
       try {
@@ -4235,7 +4810,7 @@ ${error.stack}`);
       }
     }
     async function sendQuestion(panel) {
-      const topicId = normalizeTopicId2(panel?.dataset.topicId);
+      const topicId = normalizeTopicId4(panel?.dataset.topicId);
       const input = panel?.querySelector(".topic-question-input");
       const sendButton = panel?.querySelector(".topic-question-send");
       if (!topicId || !input) return;
@@ -4256,7 +4831,8 @@ ${error.stack}`);
         if (typeof askTopicQuestion2 !== "function") {
           throw new Error("缺少提问请求处理函数");
         }
-        await askTopicQuestion2({
+        await askTopicQuestionWithRetry({
+          panel,
           topicId,
           question,
           preset
@@ -4360,7 +4936,7 @@ ${error.stack}`);
       return panel;
     }
     function preparePanel(panel, topicId, options = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!panel || !normalizedTopicId) return null;
       panel.dataset.topicId = normalizedTopicId;
       renderPresetButtons(panel);
@@ -4383,7 +4959,7 @@ ${error.stack}`);
       return panel;
     }
     function openSidebarQuestionPanel(topicId, options = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) {
         createToast2?.("无法获取当前主题ID！", "error");
         return null;
@@ -4414,7 +4990,7 @@ ${error.stack}`);
       return preparedPanel;
     }
     function openListQuestionPanel({ topicId, container, buttonGroup, focus = true, onClose = null } = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId || !container) return null;
       let panel = container.querySelector(".topic-question-panel-list");
       if (!panel) {
@@ -4434,7 +5010,7 @@ ${error.stack}`);
     }
     function closeQuestionPanel(panel) {
       if (!panel) return;
-      const topicId = normalizeTopicId2(panel.dataset.topicId);
+      const topicId = normalizeTopicId4(panel.dataset.topicId);
       panel.style.display = "none";
       hidePresetMenu(panel);
       if (topicId && activePanelsByTopic.get(topicId) === panel) {
@@ -4449,7 +5025,7 @@ ${error.stack}`);
       }
     }
     function refreshOpenQuestionPanels(topicId = "") {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (normalizedTopicId) {
         const panel = activePanelsByTopic.get(normalizedTopicId);
         if (panel) renderQuestionHistory(panel);
@@ -4511,6 +5087,7 @@ ${error.stack}`);
     function createSidebar2() {
       const existingSidebar = document.getElementById("summary-sidebar");
       if (existingSidebar) {
+        renderAskButtonIcon(existingSidebar.querySelector?.("#question-button"));
         return existingSidebar;
       }
       const sidebar = document.createElement("div");
@@ -4527,7 +5104,7 @@ ${error.stack}`);
             <div class="button-container row-1">
                   <button type="button" id="settings-button" class="custom-button" title="脚本设置" >🛠️</button>
                   <button type="button" id="refresh-button" class="custom-button" title="刷新页面" >🔄</button>
-                  <button type="button" id="question-button" class="custom-button question-button" title="提问 / 追问" >?</button>
+                  <button type="button" id="question-button" class="custom-button question-button" title="提问 / 追问" aria-label="提问 / 追问">${ASK_BUTTON_ICON_SVG}</button>
             </div>
             <div class="button-container row-2">
                   <button type="button" id="history-button" class="custom-button history-button" title="查看历史记录" >📜 历史</button>
@@ -4564,6 +5141,7 @@ ${error.stack}`);
       }
       const questionButton = form.querySelector("#question-button");
       if (questionButton) {
+        renderAskButtonIcon(questionButton);
         questionButton.addEventListener("click", function(event) {
           event.preventDefault();
           if (typeof onQuestionClick === "function") {
@@ -4980,6 +5558,10 @@ ${error.stack}`);
       normalizeAutoRetryCount: normalizeAutoRetryCount2,
       normalizeAutoRetryInterval: normalizeAutoRetryInterval2,
       normalizeCurrentApiIndex: normalizeCurrentApiIndex2,
+      normalizeDeArrowApiIndex: normalizeDeArrowApiIndex2,
+      normalizeDeArrowScopeRules: normalizeDeArrowScopeRules2,
+      validateDeArrowScopeRules: validateDeArrowScopeRules2,
+      normalizeDeArrowTopicStates: normalizeDeArrowTopicStates2,
       normalizeSummaryOutputFilters: normalizeSummaryOutputFilters2,
       normalizeSummaryWidthOffset: normalizeSummaryWidthOffset2,
       sanitizeSummaryTopicIds: sanitizeSummaryTopicIds2,
@@ -4996,9 +5578,12 @@ ${error.stack}`);
       setSummaryHistoryMap,
       getTopicQuestionHistoryMap,
       setTopicQuestionHistoryMap,
+      getDeArrowTopicStates,
+      setDeArrowTopicStates,
       syncSummaryTopicIdsFromSources: syncSummaryTopicIdsFromSources2,
       replaceSummaryTopicIdsFromHistoryMap: replaceSummaryTopicIdsFromHistoryMap2,
       markDriveSummaryTopicsDirty: markDriveSummaryTopicsDirty2,
+      markDriveDeArrowDirty: markDriveDeArrowDirty2,
       scheduleDriveSummarySync: scheduleDriveSummarySync2,
       updateAllSummaryButtonsAndContainers,
       refreshListSummaryForCurrentPage: refreshListSummaryForCurrentPage2,
@@ -5007,6 +5592,7 @@ ${error.stack}`);
       addTopicListSummaryButtons,
       restoreExpandedSummaryRows,
       updateListSummaryStyles,
+      refreshDeArrowForCurrentPage: refreshDeArrowForCurrentPage2,
       updateSidebarSubmitButtonState: updateSidebarSubmitButtonState2,
       uploadSummaryHistoryToDrive: uploadSummaryHistoryToDrive2,
       rebuildSummaryTopicIdsFromDrive: rebuildSummaryTopicIdsFromDrive2,
@@ -5024,6 +5610,8 @@ ${error.stack}`);
     let updateQuestionPresetSelect = () => {
     };
     let updateApiSelect = () => {
+    };
+    let updateDeArrowSettingsInputs = () => {
     };
     let updateSummaryWidthOffset = () => {
     };
@@ -5269,6 +5857,7 @@ ${error.stack}`);
       updateQuestionPresetSelect();
       updateSummaryFilterInputs();
       updateApiSelect();
+      updateDeArrowSettingsInputs();
       updateSummaryWidthOffset();
       updateAdjustmentPrompts2();
       applyTabsCollapsedState(state2.settingsTabsCollapsed);
@@ -5316,6 +5905,12 @@ ${error.stack}`);
       const apiUrl = document.getElementById("api-url");
       const apiKey = document.getElementById("api-key");
       const apiModel = document.getElementById("api-model");
+      const apiImageInputEnabled = document.getElementById("api-image-input-enabled");
+      const apiImageOptions = document.getElementById("api-image-options");
+      const apiImageDetail = document.getElementById("api-image-detail");
+      const apiMaxImages = document.getElementById("api-max-images");
+      const apiMaxImageMb = document.getElementById("api-max-image-mb");
+      const apiMaxTotalImageMb = document.getElementById("api-max-total-image-mb");
       const toggleApiKeyButton = document.getElementById("toggle-api-key");
       if (toggleApiKeyButton && apiKey) {
         let adjustApiKeyTextarea = function() {
@@ -5446,6 +6041,12 @@ ${error.stack}`);
       const listSummaryEnabledSwitch = document.getElementById("list-summary-enabled-switch");
       const autoShowSummarySwitch = document.getElementById("auto-show-summary-switch");
       const listSummaryMaxLinesInput = document.getElementById("list-summary-max-lines");
+      const dearrowEnabledSwitch = document.getElementById("dearrow-enabled-switch");
+      const dearrowJudgmentApiSelect = document.getElementById("dearrow-judgment-api-select");
+      const dearrowRewriteApiSelect = document.getElementById("dearrow-rewrite-api-select");
+      const dearrowScopeRulesInput = document.getElementById("dearrow-scope-rules");
+      const dearrowScopeError = document.getElementById("dearrow-scope-error");
+      const saveDeArrowSettingsButton = document.getElementById("save-dearrow-settings");
       const syncAutoSummarizeSwitches = () => {
         if (newTopicAutoSummarizeCheckbox) {
           newTopicAutoSummarizeCheckbox.checked = state2.newTopicAutoSummarize;
@@ -5666,6 +6267,82 @@ ${error.stack}`);
         autoShowSummarySwitch.addEventListener("change", () => autoSaveListSummarySettings());
         listSummaryMaxLinesInput.addEventListener("change", () => autoSaveListSummarySettings());
       }
+      const renderDeArrowScopeError = (messages = []) => {
+        if (!dearrowScopeError) return;
+        const normalizedMessages = Array.isArray(messages) ? messages.map((message) => String(message || "").trim()).filter(Boolean) : [];
+        dearrowScopeError.textContent = normalizedMessages.join("\n");
+        dearrowScopeError.classList.toggle("visible", normalizedMessages.length > 0);
+      };
+      updateDeArrowSettingsInputs = () => {
+        if (dearrowEnabledSwitch) {
+          dearrowEnabledSwitch.checked = state2.dearrowEnabled === true;
+        }
+        const apiList = Array.isArray(state2.apiConfigurations) ? state2.apiConfigurations : [];
+        const populateDeArrowApiSelect = (select, stateKey) => {
+          if (!select) return;
+          const normalizedIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(state2[stateKey], apiList) : Math.max(0, Math.min(Math.max(0, apiList.length - 1), parseInt(state2[stateKey], 10) || 0));
+          state2[stateKey] = normalizedIndex;
+          select.innerHTML = "";
+          apiList.forEach((config, index) => {
+            const option = document.createElement("option");
+            option.value = String(index);
+            const name = String(config?.name || "").trim();
+            const model = String(config?.model || "").trim();
+            option.textContent = name && model && name !== model ? `${name}（${model}）` : name || model || `API ${index + 1}`;
+            select.appendChild(option);
+          });
+          select.value = String(normalizedIndex);
+          select.disabled = apiList.length === 0;
+        };
+        populateDeArrowApiSelect(dearrowJudgmentApiSelect, "dearrowJudgmentApiIndex");
+        populateDeArrowApiSelect(dearrowRewriteApiSelect, "dearrowRewriteApiIndex");
+        if (dearrowScopeRulesInput) {
+          const rules = typeof normalizeDeArrowScopeRules2 === "function" ? normalizeDeArrowScopeRules2(state2.dearrowScopeRules) : Array.isArray(state2.dearrowScopeRules) ? state2.dearrowScopeRules : [];
+          dearrowScopeRulesInput.value = rules.join("\n");
+        }
+        renderDeArrowScopeError([]);
+      };
+      const saveDeArrowSettings = ({ showToast = true } = {}) => {
+        if (!dearrowEnabledSwitch || !dearrowJudgmentApiSelect || !dearrowRewriteApiSelect || !dearrowScopeRulesInput) return false;
+        const rawScopeRules = dearrowScopeRulesInput.value;
+        const validation = typeof validateDeArrowScopeRules2 === "function" ? validateDeArrowScopeRules2(rawScopeRules) : {
+          valid: rawScopeRules.split(/\r?\n/).some((line) => line.trim()),
+          rules: rawScopeRules.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+          errors: []
+        };
+        if (!validation.valid) {
+          const messages = (validation.errors || []).map((error) => error?.message || String(error));
+          renderDeArrowScopeError(messages.length ? messages : ["作用范围配置无效"]);
+          if (showToast) {
+            createSettingsToast2("DeArrow 作用范围配置无效，请检查后重试。", "error", 3200);
+          }
+          return false;
+        }
+        const apiList = Array.isArray(state2.apiConfigurations) ? state2.apiConfigurations : [];
+        state2.dearrowEnabled = dearrowEnabledSwitch.checked === true;
+        state2.dearrowJudgmentApiIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(dearrowJudgmentApiSelect.value, apiList) : Math.max(0, parseInt(dearrowJudgmentApiSelect.value, 10) || 0);
+        state2.dearrowRewriteApiIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(dearrowRewriteApiSelect.value, apiList) : Math.max(0, parseInt(dearrowRewriteApiSelect.value, 10) || 0);
+        state2.dearrowScopeRules = validation.rules;
+        GM_setValue2("dearrowEnabled", state2.dearrowEnabled);
+        GM_setValue2("dearrowJudgmentApiIndex", state2.dearrowJudgmentApiIndex);
+        GM_setValue2("dearrowRewriteApiIndex", state2.dearrowRewriteApiIndex);
+        GM_setValue2("dearrowScopeRules", state2.dearrowScopeRules);
+        renderDeArrowScopeError([]);
+        refreshDeArrowForCurrentPage2?.({ forceRebuild: true, pullDrive: true });
+        if (showToast) {
+          createSettingsToast2("DeArrow 设置已保存并应用！", "success", 2400);
+        }
+        return true;
+      };
+      if (dearrowEnabledSwitch) {
+        dearrowEnabledSwitch.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
+      }
+      dearrowJudgmentApiSelect?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
+      dearrowRewriteApiSelect?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
+      if (saveDeArrowSettingsButton) {
+        saveDeArrowSettingsButton.addEventListener("click", () => saveDeArrowSettings());
+      }
+      updateDeArrowSettingsInputs();
       function updatePromptConfigInputs() {
         if (!promptName || !promptSummaryMethod || !promptOutputFormat) return;
         const currentConfig = state2.promptConfigurations[state2.currentPromptIndex];
@@ -5864,6 +6541,27 @@ ${error.stack}`);
           resetSummaryFilterSettings();
         });
       }
+      const bytesToMbInputValue = (bytes, fallbackBytes) => {
+        const numeric = Number(bytes);
+        const fallback = Number(fallbackBytes);
+        const normalized = Number.isFinite(numeric) && numeric > 0 ? numeric : Number.isFinite(fallback) && fallback > 0 ? fallback : 4 * 1024 * 1024;
+        const mb = normalized / (1024 * 1024);
+        return Number.isInteger(mb) ? String(mb) : String(Number(mb.toFixed(2)));
+      };
+      const mbInputToBytes = (value, fallbackBytes) => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed <= 0) return fallbackBytes;
+        return Math.round(parsed * 1024 * 1024);
+      };
+      function syncApiImageOptionsState() {
+        const enabled = apiImageInputEnabled?.checked === true;
+        if (apiImageOptions) {
+          apiImageOptions.style.display = enabled ? "" : "none";
+          apiImageOptions.querySelectorAll("input, select").forEach((input) => {
+            input.disabled = !enabled;
+          });
+        }
+      }
       function updateApiConfigInputs() {
         if (!apiName || !apiUrl || !apiKey || !apiModel || !newTopicAutoSummarizeCheckbox || !autoRetryCountInput || !autoRetryIntervalInput) return;
         const currentConfig = getCurrentApiConfiguration2();
@@ -5879,6 +6577,22 @@ ${error.stack}`);
         }
         autoRetryCountInput.value = normalizeAutoRetryCount2(currentConfig.retryCount, state2.autoRetryCount);
         autoRetryIntervalInput.value = normalizeAutoRetryInterval2(currentConfig.retryInterval, state2.autoRetryInterval);
+        if (apiImageInputEnabled) {
+          apiImageInputEnabled.checked = currentConfig.imageInputEnabled === true;
+        }
+        if (apiImageDetail) {
+          apiImageDetail.value = currentConfig.imageDetail || "auto";
+        }
+        if (apiMaxImages) {
+          apiMaxImages.value = currentConfig.maxImagesPerRequest || 6;
+        }
+        if (apiMaxImageMb) {
+          apiMaxImageMb.value = bytesToMbInputValue(currentConfig.maxImageBytes, 4 * 1024 * 1024);
+        }
+        if (apiMaxTotalImageMb) {
+          apiMaxTotalImageMb.value = bytesToMbInputValue(currentConfig.maxTotalImageBytes, 12 * 1024 * 1024);
+        }
+        syncApiImageOptionsState();
       }
       updateApiSelect = () => {
         if (!apiSelect) return;
@@ -5892,6 +6606,7 @@ ${error.stack}`);
         });
         apiSelect.value = String(state2.currentApiIndex);
         updateApiConfigInputs();
+        updateDeArrowSettingsInputs();
       };
       if (apiSelect) {
         apiSelect.addEventListener("change", (e) => {
@@ -5899,6 +6614,11 @@ ${error.stack}`);
           GM_setValue2("currentApiIndex", state2.currentApiIndex);
           syncAutoRetrySettingsFromCurrentApiConfiguration2?.();
           updateApiConfigInputs();
+        });
+      }
+      if (apiImageInputEnabled) {
+        apiImageInputEnabled.addEventListener("change", () => {
+          syncApiImageOptionsState();
         });
       }
       if (saveApi) {
@@ -5928,7 +6648,12 @@ ${error.stack}`);
             key: apiKey.value.trim(),
             model: apiModel.value.trim(),
             retryCount: nextRetryCount,
-            retryInterval: nextRetryInterval
+            retryInterval: nextRetryInterval,
+            imageInputEnabled: apiImageInputEnabled?.checked === true,
+            imageDetail: apiImageDetail?.value || currentConfig?.imageDetail || "auto",
+            maxImagesPerRequest: apiMaxImages?.value || currentConfig?.maxImagesPerRequest || 6,
+            maxImageBytes: mbInputToBytes(apiMaxImageMb?.value, currentConfig?.maxImageBytes || 4 * 1024 * 1024),
+            maxTotalImageBytes: mbInputToBytes(apiMaxTotalImageMb?.value, currentConfig?.maxTotalImageBytes || 12 * 1024 * 1024)
           }, currentConfig || {});
           state2.autoRetryCount = nextRetryCount;
           state2.autoRetryInterval = nextRetryInterval;
@@ -6028,8 +6753,13 @@ ${error.stack}`);
             listPageSummaryEnabled: state2.listPageSummaryEnabled,
             autoShowSummaryInList: state2.autoShowSummaryInList,
             listPageSummaryMaxLines: state2.listPageSummaryMaxLines,
+            dearrowEnabled: state2.dearrowEnabled === true,
+            dearrowJudgmentApiIndex: state2.dearrowJudgmentApiIndex,
+            dearrowRewriteApiIndex: state2.dearrowRewriteApiIndex,
+            dearrowScopeRules: state2.dearrowScopeRules,
             toastEnabled: state2.toastEnabled,
             toastSettings: state2.toastSettings,
+            toastClickAutoOpenSidebar: state2.toastClickAutoOpenSidebar,
             summaryTopicIds: Array.from(state2.summaryTopicIds),
             summaryWidthType: state2.summaryWidthType,
             summaryWidthValue: state2.summaryWidthValue,
@@ -6063,7 +6793,13 @@ ${error.stack}`);
       function importSettings(importedSettings) {
         if (!importedSettings || typeof importedSettings !== "object" || !Array.isArray(importedSettings.promptConfigurations)) {
           createSettingsToast2("导入失败：设置数据无效或格式错误！", "error");
-          return;
+          return false;
+        }
+        const importedDeArrowScopeValidation = importedSettings.dearrowScopeRules !== void 0 ? typeof validateDeArrowScopeRules2 === "function" ? validateDeArrowScopeRules2(importedSettings.dearrowScopeRules) : { valid: true, rules: importedSettings.dearrowScopeRules, errors: [] } : null;
+        if (importedDeArrowScopeValidation && !importedDeArrowScopeValidation.valid) {
+          const firstError = importedDeArrowScopeValidation.errors?.[0]?.message || "DeArrow 作用范围无效";
+          createSettingsToast2(`导入失败：${firstError}`, "error", 3200);
+          return false;
         }
         try {
           state2.promptConfigurations = importedSettings.promptConfigurations ?? state2.promptConfigurations;
@@ -6083,8 +6819,24 @@ ${error.stack}`);
           state2.listPageSummaryEnabled = importedSettings.listPageSummaryEnabled !== void 0 ? importedSettings.listPageSummaryEnabled : state2.listPageSummaryEnabled;
           state2.autoShowSummaryInList = importedSettings.autoShowSummaryInList !== void 0 ? importedSettings.autoShowSummaryInList : state2.autoShowSummaryInList;
           state2.listPageSummaryMaxLines = importedSettings.listPageSummaryMaxLines ?? state2.listPageSummaryMaxLines;
+          state2.dearrowEnabled = importedSettings.dearrowEnabled !== void 0 ? importedSettings.dearrowEnabled === true : state2.dearrowEnabled;
+          const importedLegacyDeArrowApiIndex = importedSettings.dearrowApiIndex;
+          const importedJudgmentApiIndex = importedSettings.dearrowJudgmentApiIndex ?? importedLegacyDeArrowApiIndex ?? state2.dearrowJudgmentApiIndex;
+          const importedRewriteApiIndex = importedSettings.dearrowRewriteApiIndex ?? importedLegacyDeArrowApiIndex ?? state2.dearrowRewriteApiIndex;
+          state2.dearrowJudgmentApiIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(
+            importedJudgmentApiIndex,
+            state2.apiConfigurations
+          ) : Math.max(0, parseInt(importedJudgmentApiIndex, 10) || 0);
+          state2.dearrowRewriteApiIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(
+            importedRewriteApiIndex,
+            state2.apiConfigurations
+          ) : Math.max(0, parseInt(importedRewriteApiIndex, 10) || 0);
+          if (importedDeArrowScopeValidation) {
+            state2.dearrowScopeRules = importedDeArrowScopeValidation.rules;
+          }
           state2.toastEnabled = importedSettings.toastEnabled !== void 0 ? importedSettings.toastEnabled : state2.toastEnabled;
           state2.toastSettings = importedSettings.toastSettings ?? state2.toastSettings;
+          state2.toastClickAutoOpenSidebar = importedSettings.toastClickAutoOpenSidebar !== void 0 ? importedSettings.toastClickAutoOpenSidebar : state2.toastClickAutoOpenSidebar;
           state2.summaryWidthType = importedSettings.summaryWidthType ?? state2.summaryWidthType;
           state2.summaryWidthValue = importedSettings.summaryWidthValue ?? state2.summaryWidthValue;
           if (importedSettings.driveSummarySettings) {
@@ -6112,8 +6864,13 @@ ${error.stack}`);
           GM_setValue2("listPageSummaryEnabled", state2.listPageSummaryEnabled);
           GM_setValue2("autoShowSummaryInList", state2.autoShowSummaryInList);
           GM_setValue2("listPageSummaryMaxLines", state2.listPageSummaryMaxLines);
+          GM_setValue2("dearrowEnabled", state2.dearrowEnabled);
+          GM_setValue2("dearrowJudgmentApiIndex", state2.dearrowJudgmentApiIndex);
+          GM_setValue2("dearrowRewriteApiIndex", state2.dearrowRewriteApiIndex);
+          GM_setValue2("dearrowScopeRules", state2.dearrowScopeRules);
           GM_setValue2("toastEnabled", state2.toastEnabled);
           GM_setValue2("toastSettings", state2.toastSettings);
+          GM_setValue2("toastClickAutoOpenSidebar", state2.toastClickAutoOpenSidebar);
           GM_setValue2("summaryWidthType", state2.summaryWidthType);
           GM_setValue2("summaryWidthValue", state2.summaryWidthValue);
           GM_setValue2("sidebarWidth", resolvedSidebarSettings.sidebarWidth);
@@ -6126,6 +6883,7 @@ ${error.stack}`);
           const summaryWidthOffsetInput = document.getElementById("summary-width-offset");
           const newTopicAutoSummarizeCheckboxEl = document.getElementById("new-topic-auto-summarize");
           const sidebarAutoSummarizeSwitchEl = document.getElementById("sidebar-auto-summarize-switch");
+          const toastClickAutoOpenSidebarSwitchEl = document.getElementById("toast-click-auto-open-sidebar-switch");
           const autoRetryCountInputEl = document.getElementById("auto-retry-count");
           const autoRetryIntervalInputEl = document.getElementById("auto-retry-interval");
           if (listSummaryEnabledSwitchEl) listSummaryEnabledSwitchEl.checked = state2.listPageSummaryEnabled;
@@ -6139,8 +6897,10 @@ ${error.stack}`);
           if (summaryWidthOffsetInput) summaryWidthOffsetInput.value = state2.summaryWidthOffset;
           if (newTopicAutoSummarizeCheckboxEl) newTopicAutoSummarizeCheckboxEl.checked = state2.newTopicAutoSummarize;
           if (sidebarAutoSummarizeSwitchEl) sidebarAutoSummarizeSwitchEl.checked = state2.newTopicAutoSummarize;
+          if (toastClickAutoOpenSidebarSwitchEl) toastClickAutoOpenSidebarSwitchEl.checked = state2.toastClickAutoOpenSidebar;
           if (autoRetryCountInputEl) autoRetryCountInputEl.value = state2.autoRetryCount;
           if (autoRetryIntervalInputEl) autoRetryIntervalInputEl.value = state2.autoRetryInterval;
+          updateDeArrowSettingsInputs();
           try {
             addToastSettingsToModal2();
             updateAdjustmentPrompts2();
@@ -6162,6 +6922,7 @@ ${error.stack}`);
               removeTopicListSummaryButtons2?.({ preserveExpanded: true });
               if (window.topicListObserver) window.topicListObserver.disconnect();
             }
+            refreshDeArrowForCurrentPage2?.({ forceRebuild: true, pullDrive: true });
             updateAllSummaryButtonsAndContainers?.();
             const currentTopicId = document.getElementById("building")?.value || extractTopicId2?.();
             if (currentTopicId) {
@@ -6172,9 +6933,11 @@ ${error.stack}`);
             console.warn("UI refresh after import failed:", uiErr);
           }
           createSettingsToast2("设置已成功导入并应用！", "success", 3e3);
+          return true;
         } catch (error) {
           createSettingsToast2("应用导入的设置时出错！", "error");
           console.error("Error applying imported settings:", error);
+          return false;
         }
       }
       if (exportSettingsButton && exportSettingsButton.dataset.bound !== "true") {
@@ -6233,9 +6996,13 @@ ${error.stack}`);
           setSummaryHistoryMap: (summaryHistory) => setSummaryHistoryMap(summaryHistory),
           getTopicQuestionHistoryMap: () => getTopicQuestionHistoryMap?.() || {},
           setTopicQuestionHistoryMap: (questionHistory) => setTopicQuestionHistoryMap?.(questionHistory),
+          getDeArrowTopicStates: () => getDeArrowTopicStates?.() || {},
+          setDeArrowTopicStates: (topicStates) => setDeArrowTopicStates?.(topicStates),
+          normalizeDeArrowTopicStates: normalizeDeArrowTopicStates2,
           syncSummaryTopicIdsFromSources: syncSummaryTopicIdsFromSources2,
           replaceSummaryTopicIdsFromHistoryMap: replaceSummaryTopicIdsFromHistoryMap2,
           markDriveSummaryTopicsDirty: markDriveSummaryTopicsDirty2,
+          markDriveDeArrowDirty: markDriveDeArrowDirty2,
           scheduleDriveSummarySync: scheduleDriveSummarySync2,
           updateAllSummaryButtonsAndContainers,
           syncDriveSummarySettingsUI: syncDriveSummarySettingsUI2,
@@ -6640,11 +7407,29 @@ ${error.stack}`);
             <span class="tooltip">启用后，点击总结完成Toast会自动展开对应总结。</span>
         `;
       basicContent.appendChild(autoExpandSwitchDiv);
+      const clickAutoOpenSidebarSwitchDiv = document.createElement("div");
+      clickAutoOpenSidebarSwitchDiv.className = "switch-container";
+      clickAutoOpenSidebarSwitchDiv.innerHTML = `
+            <span class="switch-label">3. 点击 Toast 自动展开侧边栏（关/开）</span>
+            <label class="switch switch-on-off">
+                <input type="checkbox" id="toast-click-auto-open-sidebar-switch" ${state2.toastClickAutoOpenSidebar ? "checked" : ""}>
+                <span class="slider"></span>
+            </label>
+            <span class="tooltip">启用后，在话题页点击当前话题Toast会自动展开折叠的侧边栏。</span>
+        `;
+      basicContent.appendChild(clickAutoOpenSidebarSwitchDiv);
       const toastAutoExpandSwitch = document.getElementById("toast-auto-expand-switch");
       if (toastAutoExpandSwitch) {
         toastAutoExpandSwitch.addEventListener("change", () => {
           state2.toastAutoExpand = toastAutoExpandSwitch.checked;
           GM_setValue2("toastAutoExpand", state2.toastAutoExpand);
+        });
+      }
+      const toastClickAutoOpenSidebarSwitch = document.getElementById("toast-click-auto-open-sidebar-switch");
+      if (toastClickAutoOpenSidebarSwitch) {
+        toastClickAutoOpenSidebarSwitch.addEventListener("change", () => {
+          state2.toastClickAutoOpenSidebar = toastClickAutoOpenSidebarSwitch.checked;
+          GM_setValue2("toastClickAutoOpenSidebar", state2.toastClickAutoOpenSidebar);
         });
       }
       const delayContent = document.createElement("div");
@@ -7088,6 +7873,34 @@ ${error.stack}`);
                                 <label>🤖 模型名：
                                     <input type="text" id="api-model" placeholder="API model name">
                                 </label>
+                                <div class="api-image-settings">
+                                    <div class="switch-container">
+                                        <span class="switch-label">🖼️ 图片输入（关/开）</span>
+                                        <label class="switch switch-on-off">
+                                            <input type="checkbox" id="api-image-input-enabled">
+                                            <span class="slider"></span>
+                                        </label>
+                                        <span class="tooltip">启用后，该 API 配置会把话题图片随请求发送给支持视觉输入的模型。</span>
+                                    </div>
+                                    <div id="api-image-options" class="api-image-options">
+                                        <label>图片清晰度：
+                                            <select id="api-image-detail">
+                                                <option value="auto">auto</option>
+                                                <option value="low">low</option>
+                                                <option value="high">high</option>
+                                            </select>
+                                        </label>
+                                        <label>每次最多图片数：
+                                            <input type="number" id="api-max-images" min="1" max="20" step="1">
+                                        </label>
+                                        <label>单图上限（MB）：
+                                            <input type="number" id="api-max-image-mb" min="0.25" max="20" step="0.25">
+                                        </label>
+                                        <label>总图片上限（MB）：
+                                            <input type="number" id="api-max-total-image-mb" min="0.25" max="60" step="0.25">
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                             <div class="api-settings-action-bar">
                                 <div class="button-group">
@@ -7131,6 +7944,7 @@ ${error.stack}`);
                 <div class="list-summary-sub-tabs">
                     <button class="list-summary-sub-tab-button active" data-list-summary-tab="list-summary-position">位置 / 自动展开</button>
                     <button class="list-summary-sub-tab-button" data-list-summary-tab="list-summary-dimensions">高度 / 宽度</button>
+                    <button class="list-summary-sub-tab-button" data-list-summary-tab="list-summary-dearrow">DeArrow</button>
                 </div>
                 <div class="list-summary-sub-tab-panels">
                     <div class="list-summary-sub-tab-content settings-card active" id="list-summary-position">
@@ -7163,6 +7977,39 @@ ${error.stack}`);
                         <div class="width-settings">
                             <!-- 宽度设置内容将通过JavaScript动态生成 -->
                         </div>
+                    </div>
+                    <div class="list-summary-sub-tab-content settings-card" id="list-summary-dearrow">
+                        <div class="switch-container">
+                            <span class="switch-label">1. 标题党自动替换（关/开）</span>
+                            <label class="switch switch-on-off">
+                                <input type="checkbox" id="dearrow-enabled-switch">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="tooltip">开启后，在命中的话题列表中自动判断标题党，并显示 DeArrow 按钮。</span>
+                        </div>
+                        <hr>
+                        <label class="dearrow-setting-field">
+                            <span class="dearrow-setting-label">2. 标题判断模型（API 配置）：</span>
+                            <select id="dearrow-judgment-api-select"></select>
+                            <span class="tooltip">用于批量判断原标题是否为标题党，建议选择速度快、成本低的小模型。</span>
+                        </label>
+                        <hr>
+                        <label class="dearrow-setting-field">
+                            <span class="dearrow-setting-label">3. 标题重写模型（API 配置）：</span>
+                            <select id="dearrow-rewrite-api-select"></select>
+                            <span class="tooltip">用于读取首帖正文后生成新标题，可独立选择更适合写作的模型。</span>
+                        </label>
+                        <hr>
+                        <label class="dearrow-setting-field dearrow-scope-field">
+                            <span class="dearrow-setting-label">4. 作用范围（每行一个完整 URL）：</span>
+                            <textarea id="dearrow-scope-rules" rows="5" spellcheck="false" placeholder="https://linux.do/latest?order=created"></textarea>
+                            <span class="tooltip">默认精确匹配；可使用 * 匹配任意字符。仅接受 https://linux.do URL，URL 的 #hash 会被忽略。</span>
+                        </label>
+                        <div id="dearrow-scope-error" class="dearrow-scope-error" role="status" aria-live="polite"></div>
+                        <div class="settings-card-actions dearrow-settings-actions">
+                            <button id="save-dearrow-settings" class="custom-button btn btn-icon-text btn-primary save-button"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存并应用</span></button>
+                        </div>
+                        <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。</p>
                     </div>
                 </div>
             </div>
@@ -8466,6 +9313,30 @@ ${error.stack}`);
             font-weight: 600;
             color: var(--modal-text);
         }
+        .api-image-settings {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px dashed rgba(var(--settings-card-rgb, 0, 188, 212), 0.38);
+        }
+        .api-image-settings .switch-container {
+            margin-bottom: 0;
+        }
+        .api-image-options {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .api-image-options label {
+            margin: 0;
+        }
+        @media (max-width: 768px) {
+            .api-image-options {
+                grid-template-columns: 1fr;
+            }
+        }
         .api-settings-action-bar {
             display: flex;
             justify-content: flex-end;
@@ -8845,19 +9716,323 @@ ${error.stack}`);
 
         /* === 新增列表页总结按钮样式 === */
 
+        .topic-list-item.has-summary-button {
+            position: relative;
+        }
+
+        .topic-list-item.has-dearrow-button {
+            position: relative;
+        }
+
+        .topic-list-item:not(.bookmark-list-item) .main-link {
+            position: relative;
+            box-sizing: border-box;
+            min-height: 46px;
+            padding-right: 142px;
+        }
+
+        .topic-list-item:not(.bookmark-list-item) .main-link:has(.topic-dearrow-button):has(.topic-summary-button) {
+            min-height: 74px;
+        }
+
         /* === Mobile layout fix for summary button === */
         @media (max-width: 1000px) {
-            /* Place summary button at the bottom-right corner under the time column */
+            .topic-list-item:not(.bookmark-list-item) .main-link {
+                min-height: 44px;
+                padding-right: 132px;
+            }
             .topic-summary-button {
                 top: auto !important;
-                bottom: -14px !important;
-                right: -230px !important;
+                bottom: 8px !important;
+                right: 8px !important;
             }
             .topic-question-button {
                 top: auto !important;
-                bottom: -14px !important;
-                right: -265px !important;
+                bottom: 8px !important;
+                right: 88px !important;
             }
+            .topic-dearrow-button {
+                top: auto !important;
+                bottom: 36px !important;
+                right: 8px !important;
+            }
+            .topic-list-item:not(.bookmark-list-item) .main-link:has(.topic-dearrow-button):not(:has(.topic-summary-button)) .topic-dearrow-button {
+                bottom: 8px !important;
+            }
+        }
+
+        .topic-dearrow-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            appearance: none;
+            -webkit-appearance: none;
+            background-color: transparent !important;
+            background-image: none !important;
+            color: inherit;
+            border: 0 !important;
+            border-radius: 0;
+            box-shadow: none !important;
+            outline: 0 !important;
+            padding: 2px 4px;
+            margin-left: 8px;
+            margin-right: 0;
+            width: 28px;
+            min-width: 28px;
+            height: 24px;
+            line-height: 1;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+            position: absolute;
+            right: 10px;
+            top: auto;
+            bottom: 38px;
+            z-index: 10;
+        }
+
+        .topic-dearrow-button .topic-dearrow-icon {
+            display: block;
+            width: 20px;
+            height: 20px;
+            flex: none;
+            pointer-events: none;
+        }
+
+        .topic-dearrow-button .topic-dearrow-icon path {
+            transition: fill 0.18s ease;
+        }
+
+        .topic-dearrow-button:focus-visible {
+            outline: 2px solid var(--tertiary, #4A90E2) !important;
+            outline-offset: 2px !important;
+            border-radius: 50%;
+        }
+
+        /* AI 已判断为非标题党：常驻灰度图标。 */
+        .topic-dearrow-button.is-neutral .topic-dearrow-icon path:nth-of-type(1) {
+            fill: #6B6B6B;
+        }
+
+        .topic-dearrow-button.is-neutral .topic-dearrow-icon path:nth-of-type(2) {
+            fill: #BDBDBD;
+        }
+
+        .topic-dearrow-button.is-neutral .topic-dearrow-icon path:nth-of-type(3) {
+            fill: #8A8A8A;
+        }
+
+        .topic-dearrow-button.is-clickbait .topic-dearrow-icon path:nth-of-type(1) {
+            fill: #C62828;
+        }
+
+        .topic-dearrow-button.is-clickbait .topic-dearrow-icon path:nth-of-type(2) {
+            fill: #FFFFFF;
+        }
+
+        .topic-dearrow-button.is-clickbait .topic-dearrow-icon path:nth-of-type(3) {
+            fill: #E53935;
+        }
+
+        /* Hover 或键盘聚焦预览原标题时，统一切换为灰度变体。 */
+        .topic-dearrow-button:hover .topic-dearrow-icon path:nth-of-type(1),
+        .topic-dearrow-button.is-previewing-original .topic-dearrow-icon path:nth-of-type(1) {
+            fill: #6B6B6B;
+        }
+
+        .topic-dearrow-button:hover .topic-dearrow-icon path:nth-of-type(2),
+        .topic-dearrow-button.is-previewing-original .topic-dearrow-icon path:nth-of-type(2) {
+            fill: #BDBDBD;
+        }
+
+        .topic-dearrow-button:hover .topic-dearrow-icon path:nth-of-type(3),
+        .topic-dearrow-button.is-previewing-original .topic-dearrow-icon path:nth-of-type(3) {
+            fill: #8A8A8A;
+        }
+
+        /* 未判断的 idle 状态与正在判断共用虚线图标；是否等待由
+           独立操作状态决定，不再由图标样式隐式推断。 */
+        .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(1),
+        .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(2),
+        .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(3),
+        .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(1),
+        .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(2),
+        .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(3) {
+            fill: none;
+            stroke-width: 0.18;
+            stroke-dasharray: 0.55 0.38;
+            stroke-linecap: round;
+        }
+
+        .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(1),
+        .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(1) {
+            stroke: #5A5A5A;
+        }
+
+        .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(2),
+        .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(2) {
+            stroke: #9E9E9E;
+        }
+
+        .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(3),
+        .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(3) {
+            stroke: #757575;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(1),
+            .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(1) {
+                stroke: #B0B0B0;
+            }
+
+            .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(2),
+            .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(2) {
+                stroke: #E8E8E8;
+            }
+
+            .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(3),
+            .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(3) {
+                stroke: #D0D0D0;
+            }
+        }
+
+        body.dark .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(1),
+        body.dark .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(1),
+        body[data-theme="dark"] .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(1),
+        body[data-theme="dark"] .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(1),
+        html.dark .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(1),
+        html.dark .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(1) {
+            stroke: #B0B0B0;
+        }
+
+        body.dark .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(2),
+        body.dark .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(2),
+        body[data-theme="dark"] .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(2),
+        body[data-theme="dark"] .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(2),
+        html.dark .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(2),
+        html.dark .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(2) {
+            stroke: #E8E8E8;
+        }
+
+        body.dark .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(3),
+        body.dark .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(3),
+        body[data-theme="dark"] .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(3),
+        body[data-theme="dark"] .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(3),
+        html.dark .topic-dearrow-button.is-unjudged .topic-dearrow-icon path:nth-of-type(3),
+        html.dark .topic-dearrow-button.is-checking .topic-dearrow-icon path:nth-of-type(3) {
+            stroke: #D0D0D0;
+        }
+
+        /* 等待判断或提取首帖时是准备阶段：灰度实体、无动画。 */
+        .topic-dearrow-button.is-preparing .topic-dearrow-icon path:nth-of-type(1) {
+            animation: none;
+            fill: #6B6B6B;
+            stroke: none;
+        }
+
+        .topic-dearrow-button.is-preparing .topic-dearrow-icon path:nth-of-type(2) {
+            animation: none;
+            fill: #BDBDBD;
+            stroke: none;
+        }
+
+        .topic-dearrow-button.is-preparing .topic-dearrow-icon path:nth-of-type(3) {
+            animation: none;
+            fill: #8A8A8A;
+            stroke: none;
+        }
+
+        /* 只有 AI 模型正在重写标题时才显示动画。 */
+        .topic-dearrow-button.is-rewriting .topic-dearrow-icon path:nth-of-type(1) {
+            animation: dearrow-rewrite-outer 1.8s ease-in-out infinite alternate;
+        }
+
+        .topic-dearrow-button.is-rewriting .topic-dearrow-icon path:nth-of-type(2) {
+            animation: dearrow-rewrite-middle 1.8s ease-in-out infinite alternate;
+        }
+
+        .topic-dearrow-button.is-rewriting .topic-dearrow-icon path:nth-of-type(3) {
+            animation: dearrow-rewrite-center 1.8s ease-in-out infinite alternate;
+        }
+
+        @keyframes dearrow-rewrite-outer {
+            0% { fill: #6B6B6B; }
+            100% { fill: #1213BD; }
+        }
+
+        @keyframes dearrow-rewrite-middle {
+            0% { fill: #BDBDBD; }
+            100% { fill: #88c9f9; }
+        }
+
+        @keyframes dearrow-rewrite-center {
+            0% { fill: #8A8A8A; }
+            100% { fill: #0a62a5; }
+        }
+
+        /* 判断或重写失败：停止可能残留的重写动画，并固定为灰度。
+           按钮本身仍可点击，以便用户重试。 */
+        .topic-dearrow-button.has-error .topic-dearrow-icon path:nth-of-type(1) {
+            animation: none;
+            fill: #6B6B6B;
+            stroke: none;
+        }
+
+        .topic-dearrow-button.has-error .topic-dearrow-icon path:nth-of-type(2) {
+            animation: none;
+            fill: #BDBDBD;
+            stroke: none;
+        }
+
+        .topic-dearrow-button.has-error .topic-dearrow-icon path:nth-of-type(3) {
+            animation: none;
+            fill: #8A8A8A;
+            stroke: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .topic-dearrow-button {
+                transition: none;
+            }
+
+            .topic-dearrow-button .topic-dearrow-icon path {
+                transition: none;
+            }
+
+            .topic-dearrow-button.is-rewriting:not(.has-error) .topic-dearrow-icon path:nth-of-type(1) {
+                animation: none;
+                fill: #1213BD;
+            }
+
+            .topic-dearrow-button.is-rewriting:not(.has-error) .topic-dearrow-icon path:nth-of-type(2) {
+                animation: none;
+                fill: #88c9f9;
+            }
+
+            .topic-dearrow-button.is-rewriting:not(.has-error) .topic-dearrow-icon path:nth-of-type(3) {
+                animation: none;
+                fill: #0a62a5;
+            }
+        }
+
+        .topic-list-item:not(.bookmark-list-item) .main-link:has(.topic-dearrow-button):not(:has(.topic-summary-button)) .topic-dearrow-button {
+            bottom: 10px;
+        }
+
+        .topic-dearrow-button.is-checking,
+        .topic-dearrow-button.is-preparing,
+        .topic-dearrow-button.is-rewriting {
+            cursor: wait;
+        }
+
+        .topic-dearrow-button:disabled {
+            cursor: wait;
+            opacity: 0.82;
+        }
+
+        .topic-dearrow-button.is-preparing:disabled,
+        .topic-dearrow-button.is-rewriting:disabled {
+            opacity: 1;
         }
 
         .topic-summary-button {
@@ -8876,8 +10051,10 @@ ${error.stack}`);
             transition: all 0.3s ease;
             position: absolute;
             right: 10px;
-            top: 10px; /* 修改：固定在顶部而不是底部 */
+            top: auto;
+            bottom: 10px;
             height: 24px; /* 保持按钮高度固定 */
+            white-space: nowrap;
             z-index: 10; /* 确保按钮始终在顶层 */
         }
 
@@ -8891,29 +10068,95 @@ ${error.stack}`);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background-color: var(--secondary-button-bg);
+            box-sizing: border-box;
+            appearance: none;
+            -webkit-appearance: none;
+            background-color: transparent !important;
+            background-image: none !important;
             color: var(--secondary-button-text);
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
+            border: 0 !important;
+            border-radius: 0;
+            box-shadow: none !important;
+            outline: 0 !important;
+            padding: 2px 4px;
             margin-left: 6px;
             margin-right: 0;
             font-size: 12px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
             position: absolute;
             right: 92px;
-            top: 10px;
+            top: auto;
+            bottom: 10px;
+            width: 28px;
             height: 24px;
             min-width: 28px;
             z-index: 10;
+            opacity: 0;
+            transform: scale(0.92);
+            pointer-events: none;
+        }
+
+        .topic-question-button .ask-button-icon,
+        #question-button .ask-button-icon {
+            display: block;
+            width: 20px;
+            height: 20px;
+            flex: none;
+            pointer-events: none;
+        }
+
+        #question-button {
+            appearance: none;
+            -webkit-appearance: none;
+            background-color: transparent !important;
+            background-image: none !important;
+            color: var(--secondary-button-text);
+            border: 0 !important;
+            border-radius: 0;
+            box-shadow: none !important;
+            outline: 0 !important;
+        }
+
+        /* 对照屏蔽脚本的按需交互：保留每行按钮作为其定位锚点，
+           但仅在当前行 hover / 键盘聚焦 / 面板激活时显示。 */
+        .topic-list-item:hover .topic-question-button,
+        .topic-list-item:focus-within .topic-question-button,
+        .topic-question-button.active,
+        .topic-question-button:focus-visible {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+
+        /* 触屏设备没有可靠 hover，保持按钮可直接点击。 */
+        @media (hover: none), (pointer: coarse) {
+            .topic-question-button {
+                opacity: 1;
+                transform: scale(1);
+                pointer-events: auto;
+            }
         }
 
         .topic-question-button:hover,
         .topic-question-button.active {
-            background-color: var(--highlight-color);
-            color: var(--button-text);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            background-color: transparent !important;
+            background-image: none !important;
+            color: var(--highlight-color);
+            border: 0 !important;
+            box-shadow: none !important;
+            outline: 0 !important;
+        }
+
+        #question-button:hover,
+        #question-button:focus-visible,
+        #question-button.active {
+            background-color: transparent !important;
+            background-image: none !important;
+            color: var(--highlight-color);
+            border: 0 !important;
+            box-shadow: none !important;
+            outline: 0 !important;
         }
 
         /* 总结中状态 */
@@ -8978,6 +10221,24 @@ ${error.stack}`);
             top: auto;
             right: auto;
             bottom: auto;
+        }
+
+        .bookmark-list-item .topic-dearrow-control-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            margin-left: auto;
+            order: 20;
+        }
+
+        .bookmark-list-item .topic-dearrow-control-stack .topic-summary-button,
+        .bookmark-list-item .topic-dearrow-control-stack .topic-dearrow-button {
+            position: static;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            margin: 0;
         }
 
         /* === 修正后的总结行样式 === */
@@ -9678,6 +10939,57 @@ ${error.stack}`);
             min-width: 72px;
             margin-left: auto;
             margin-bottom: 0;
+        }
+
+        #settings-modal #list-summary-dearrow .dearrow-setting-field {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            width: 100%;
+            margin-bottom: 0;
+        }
+
+        #settings-modal #list-summary-dearrow .dearrow-setting-label {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        #settings-modal #dearrow-judgment-api-select,
+        #settings-modal #dearrow-rewrite-api-select,
+        #settings-modal #dearrow-scope-rules {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 0;
+        }
+
+        #settings-modal #dearrow-scope-rules {
+            min-height: 112px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        #settings-modal .dearrow-scope-error {
+            display: none;
+            margin: 8px 0;
+            color: var(--toast-bg-error);
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        #settings-modal .dearrow-scope-error.visible {
+            display: block;
+        }
+
+        #settings-modal .dearrow-settings-actions {
+            justify-content: flex-end;
+            margin-top: 14px;
+        }
+
+        #settings-modal .dearrow-drive-note {
+            display: block;
+            margin: 10px 0 0;
         }
 
         #settings-modal #sidebar-settings-dimensions .sidebar-dimension-section-label,
@@ -10625,14 +11937,16 @@ ${error.stack}`);
       });
       return null;
     }
-    function scrollToAndHighlightTopic2(topicId, toastType = "info") {
+    function scrollToAndHighlightTopic2(topicId, toastType = "info", options = {}) {
       const topicElement = document.querySelector(`.topic-list-item[data-topic-id="${topicId}"]`);
       if (topicElement) {
         const originalBorder = topicElement.style.border;
         const originalBoxShadow = topicElement.style.boxShadow;
         const originalTransition = topicElement.style.transition;
         const toastColor = getToastColorVar(toastType);
-        topicElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        const scrollOptions = options && typeof options === "object" ? options : {};
+        const scrollBehavior = scrollOptions.behavior === "auto" ? "auto" : "smooth";
+        topicElement.scrollIntoView({ behavior: scrollBehavior, block: "center" });
         topicElement.style.transition = "border 0.3s ease, box-shadow 0.3s ease";
         topicElement.style.border = `2px solid ${toastColor}`;
         topicElement.style.boxShadow = `0 0 10px ${toastColor}`;
@@ -10714,8 +12028,537 @@ ${error.stack}`);
     };
   }
 
+  // src/services/imageInput.js
+  var DEFAULT_BASE_URL = "https://linux.do/";
+  var PREFERRED_IMAGE_URL_ATTRS = ["data-orig-src", "data-original-src", "data-src"];
+  var TRUSTED_IMAGE_HOST_SUFFIXES = ["linux.do", "ldstatic.com", "discourse-cdn.com"];
+  var SKIP_CLASS_RE = /\b(?:avatar|emoji|emojione|twemoji|site-icon|favicon)\b/i;
+  var SKIP_URL_RE = /(?:\/emoji\/|\/letter_avatar_proxy\/|\/user_avatar\/|twemoji|emojione)/i;
+  var IMAGE_EXTENSION_RE = /\.(?:apng|avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i;
+  var SUPPORTED_IMAGE_MIME_TYPES = /* @__PURE__ */ new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif"
+  ]);
+  function normalizeText2(value) {
+    return value === null || value === void 0 ? "" : String(value).trim();
+  }
+  function escapePlaceholderText(value) {
+    return normalizeText2(value).replace(/\s+/g, " ").slice(0, 120);
+  }
+  function getAttributeFromString(source, name) {
+    const pattern = new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s"'=<>\`]+))`, "i");
+    const match = String(source || "").match(pattern);
+    if (!match) return "";
+    return match[2] || match[3] || match[4] || "";
+  }
+  function createFallbackImageElement(tagSource) {
+    return {
+      getAttribute(name) {
+        return getAttributeFromString(tagSource, name);
+      }
+    };
+  }
+  function getImageElementsFromCooked(cooked) {
+    const html = String(cooked || "");
+    if (!html || !html.includes("<img")) return [];
+    if (typeof DOMParser === "function") {
+      try {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        return Array.from(doc.querySelectorAll("img"));
+      } catch (_2) {
+      }
+    }
+    if (typeof document !== "undefined" && typeof document.createElement === "function") {
+      try {
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html;
+        return Array.from(wrapper.querySelectorAll("img"));
+      } catch (_2) {
+      }
+    }
+    return Array.from(html.matchAll(/<img\b[^>]*>/gi)).map((match) => createFallbackImageElement(match[0]));
+  }
+  function firstSrcsetUrl(element) {
+    const srcset = normalizeText2(element?.getAttribute?.("srcset"));
+    if (!srcset) return "";
+    const candidates = srcset.split(",").map((candidate) => normalizeText2(candidate).split(/\s+/)[0]).filter(Boolean);
+    return candidates.length > 0 ? candidates[candidates.length - 1] : "";
+  }
+  function firstImageUrlAttr(element) {
+    for (const attr of PREFERRED_IMAGE_URL_ATTRS) {
+      const value = normalizeText2(element?.getAttribute?.(attr));
+      if (value) return value;
+    }
+    const srcsetUrl = firstSrcsetUrl(element);
+    if (srcsetUrl) return srcsetUrl;
+    const src = normalizeText2(element?.getAttribute?.("src"));
+    if (src) return src;
+    return "";
+  }
+  function resolveImageUrl(rawUrl, baseUrl = DEFAULT_BASE_URL) {
+    const value = normalizeText2(rawUrl);
+    if (!value) return "";
+    if (/^data:image\//i.test(value)) return value;
+    if (/^\/\//.test(value)) return `https:${value}`;
+    try {
+      return new URL(value, baseUrl || DEFAULT_BASE_URL).href;
+    } catch (_2) {
+      return "";
+    }
+  }
+  function shouldSkipImageElement(element, rawUrl, resolvedUrl) {
+    if (!rawUrl || !resolvedUrl) return "missing-url";
+    const className = normalizeText2(element?.getAttribute?.("class"));
+    const role = normalizeText2(element?.getAttribute?.("role"));
+    const alt = normalizeText2(element?.getAttribute?.("alt"));
+    if (SKIP_CLASS_RE.test(className)) return "decorative-image";
+    if (role === "presentation") return "decorative-image";
+    if (SKIP_URL_RE.test(resolvedUrl)) return "decorative-image";
+    if (/^data:image\//i.test(resolvedUrl)) return "";
+    if (IMAGE_EXTENSION_RE.test(resolvedUrl)) return "";
+    if (/\/uploads\//i.test(resolvedUrl)) return "";
+    if (alt || normalizeText2(element?.getAttribute?.("title"))) return "";
+    return "unknown-image-url";
+  }
+  function extractImagesFromCooked(cooked, options = {}) {
+    const baseUrl = options.baseUrl || DEFAULT_BASE_URL;
+    const images = [];
+    const skippedImages = [];
+    const elements = getImageElementsFromCooked(cooked);
+    elements.forEach((element, index) => {
+      const rawUrl = firstImageUrlAttr(element);
+      const url = resolveImageUrl(rawUrl, baseUrl);
+      const skipReason = shouldSkipImageElement(element, rawUrl, url);
+      const image = {
+        url,
+        rawUrl,
+        alt: normalizeText2(element?.getAttribute?.("alt")),
+        title: normalizeText2(element?.getAttribute?.("title")),
+        width: normalizeText2(element?.getAttribute?.("width")),
+        height: normalizeText2(element?.getAttribute?.("height")),
+        index
+      };
+      if (skipReason) {
+        skippedImages.push({ ...image, reason: skipReason });
+        return;
+      }
+      images.push(image);
+    });
+    return { images, skippedImages };
+  }
+  function formatImagePlaceholder(image) {
+    const parts = [
+      `图片#${image?.id || "?"}`,
+      image?.floor ? `楼层:${image.floor}` : "",
+      image?.username ? `作者:${image.username}` : "",
+      image?.alt ? `alt:${escapePlaceholderText(image.alt)}` : "",
+      image?.title ? `title:${escapePlaceholderText(image.title)}` : "",
+      image?.url ? `url:${image.url}` : ""
+    ].filter(Boolean);
+    return `[${parts.join(" ")}]`;
+  }
+  function normalizeMimeType(value, fallbackUrl = "") {
+    const normalized = normalizeText2(value).split(";")[0].trim().toLowerCase();
+    if (normalized === "image/jpg") return "image/jpeg";
+    if (SUPPORTED_IMAGE_MIME_TYPES.has(normalized)) return normalized;
+    const url = normalizeText2(fallbackUrl).toLowerCase();
+    if (/\.(?:jpg|jpeg)(?:[?#].*)?$/.test(url)) return "image/jpeg";
+    if (/\.png(?:[?#].*)?$/.test(url)) return "image/png";
+    if (/\.webp(?:[?#].*)?$/.test(url)) return "image/webp";
+    if (/\.gif(?:[?#].*)?$/.test(url)) return "image/gif";
+    return normalized || "application/octet-stream";
+  }
+  function parseResponseContentType(headers) {
+    const headerText = String(headers || "");
+    const match = headerText.match(/^content-type:\s*([^\r\n]+)/im);
+    return match ? match[1].trim() : "";
+  }
+  function arrayBufferToBase64(buffer) {
+    if (typeof Buffer !== "undefined") {
+      return Buffer.from(buffer).toString("base64");
+    }
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 32768;
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+    return btoa(binary);
+  }
+  function dataUrlToByteLength(dataUrl) {
+    const value = normalizeText2(dataUrl);
+    const commaIndex = value.indexOf(",");
+    if (commaIndex < 0) return 0;
+    const base64Length = value.length - commaIndex - 1;
+    return Math.floor(base64Length * 3 / 4);
+  }
+  function parseDataImageUrl(dataUrl) {
+    const match = normalizeText2(dataUrl).match(/^data:(image\/[a-z0-9.+-]+);base64,/i);
+    if (!match) return null;
+    const mimeType = normalizeMimeType(match[1]);
+    if (!SUPPORTED_IMAGE_MIME_TYPES.has(mimeType)) return null;
+    return {
+      url: dataUrl,
+      mimeType,
+      byteLength: dataUrlToByteLength(dataUrl)
+    };
+  }
+  function requestImageArrayBufferWithGM(requestImpl, url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        callback(value);
+      };
+      let result;
+      try {
+        result = requestImpl({
+          method: "GET",
+          url,
+          responseType: "arraybuffer",
+          timeout: timeoutMs,
+          headers: {
+            Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+          },
+          onload(response) {
+            const status = Number(response?.status || 0);
+            if (status && (status < 200 || status >= 300)) {
+              finish(reject, new Error(`Image HTTP ${status}`));
+              return;
+            }
+            finish(resolve, {
+              arrayBuffer: response?.response,
+              contentType: parseResponseContentType(response?.responseHeaders)
+            });
+          },
+          onerror(error) {
+            finish(reject, error instanceof Error ? error : new Error("Image request failed"));
+          },
+          ontimeout() {
+            finish(reject, new Error("Image request timed out"));
+          }
+        });
+      } catch (error) {
+        finish(reject, error);
+        return;
+      }
+      if (result && typeof result.then === "function") {
+        result.then((response) => {
+          const status = Number(response?.status || 0);
+          if (status && (status < 200 || status >= 300)) {
+            finish(reject, new Error(`Image HTTP ${status}`));
+            return;
+          }
+          finish(resolve, {
+            arrayBuffer: response?.response,
+            contentType: parseResponseContentType(response?.responseHeaders)
+          });
+        }, (error) => {
+          finish(reject, error instanceof Error ? error : new Error("Image request failed"));
+        });
+      }
+    });
+  }
+  async function requestImageArrayBufferWithFetch(fetchImpl, url) {
+    const response = await fetchImpl(url, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Image HTTP ${response.status}`);
+    }
+    return {
+      arrayBuffer: await response.arrayBuffer(),
+      contentType: response.headers?.get?.("content-type") || ""
+    };
+  }
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      if (typeof FileReader !== "function") {
+        reject(new Error("FileReader is unavailable"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("Failed to read image blob"));
+      reader.readAsDataURL(blob);
+    });
+  }
+  function canvasToBlob(canvas, mimeType, quality) {
+    return new Promise((resolve) => {
+      if (typeof canvas.toBlob !== "function") {
+        resolve(null);
+        return;
+      }
+      canvas.toBlob((blob) => resolve(blob), mimeType, quality);
+    });
+  }
+  async function loadBlobImage(blob) {
+    if (typeof createImageBitmap === "function") {
+      return createImageBitmap(blob);
+    }
+    if (typeof Image !== "function" || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+      return null;
+    }
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image for compression"));
+      };
+      image.src = url;
+    });
+  }
+  async function compressImageArrayBuffer(arrayBuffer, mimeType, maxBytes) {
+    if (typeof Blob !== "function" || typeof document === "undefined" || typeof document.createElement !== "function") {
+      return null;
+    }
+    const sourceBlob = new Blob([arrayBuffer], { type: mimeType });
+    const bitmap = await loadBlobImage(sourceBlob);
+    if (!bitmap) return null;
+    try {
+      const sourceWidth = Number(bitmap.width || bitmap.naturalWidth || 0);
+      const sourceHeight = Number(bitmap.height || bitmap.naturalHeight || 0);
+      if (!sourceWidth || !sourceHeight) return null;
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext?.("2d");
+      if (!ctx) return null;
+      let scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+      const qualities = [0.84, 0.74, 0.64, 0.54];
+      for (let scaleAttempt = 0; scaleAttempt < 4; scaleAttempt += 1) {
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+        canvas.width = width;
+        canvas.height = height;
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        for (const quality of qualities) {
+          const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+          if (blob && blob.size <= maxBytes) {
+            return {
+              dataUrl: await blobToDataUrl(blob),
+              mimeType: "image/jpeg",
+              byteLength: blob.size,
+              compressed: true
+            };
+          }
+        }
+        scale *= 0.72;
+      }
+    } finally {
+      if (typeof bitmap.close === "function") {
+        bitmap.close();
+      }
+    }
+    return null;
+  }
+  async function downloadImageAsDataUrl(image, options = {}) {
+    const requestImpl = options.requestImpl;
+    const fetchImpl = options.fetchImpl;
+    const timeoutMs = Number(options.timeoutMs || 15e3);
+    const maxImageBytes = Number(options.maxImageBytes || 4 * 1024 * 1024);
+    const url = image?.url;
+    const response = typeof requestImpl === "function" ? await requestImageArrayBufferWithGM(requestImpl, url, timeoutMs) : await requestImageArrayBufferWithFetch(fetchImpl || fetch, url);
+    const arrayBuffer = response?.arrayBuffer;
+    if (!(arrayBuffer instanceof ArrayBuffer) && !ArrayBuffer.isView(arrayBuffer)) {
+      throw new Error("Image response is not binary");
+    }
+    const normalizedBuffer = arrayBuffer instanceof ArrayBuffer ? arrayBuffer : arrayBuffer.buffer.slice(arrayBuffer.byteOffset, arrayBuffer.byteOffset + arrayBuffer.byteLength);
+    const byteLength = normalizedBuffer.byteLength;
+    const mimeType = normalizeMimeType(response?.contentType, url);
+    if (!SUPPORTED_IMAGE_MIME_TYPES.has(mimeType)) {
+      throw new Error(`Unsupported image type: ${mimeType}`);
+    }
+    if (byteLength > maxImageBytes) {
+      const compressed = await compressImageArrayBuffer(normalizedBuffer, mimeType, maxImageBytes);
+      if (compressed) return compressed;
+      throw new Error(`Image exceeds ${maxImageBytes} bytes`);
+    }
+    return {
+      dataUrl: `data:${mimeType};base64,${arrayBufferToBase64(normalizedBuffer)}`,
+      mimeType,
+      byteLength,
+      compressed: false
+    };
+  }
+  function hostnameMatchesSuffix(hostname, suffix) {
+    return hostname === suffix || hostname.endsWith(`.${suffix}`);
+  }
+  function isTrustedDiscourseImageUrl(url, baseUrl = DEFAULT_BASE_URL) {
+    try {
+      const imageUrl = new URL(url, baseUrl);
+      const hostname = imageUrl.hostname.toLowerCase();
+      return TRUSTED_IMAGE_HOST_SUFFIXES.some((suffix) => hostnameMatchesSuffix(hostname, suffix));
+    } catch (_2) {
+      return false;
+    }
+  }
+  async function prepareImageInputsForApi(images = [], options = {}) {
+    const apiConfig = options.apiConfig || {};
+    if (apiConfig.imageInputEnabled !== true) {
+      return {
+        imageInputs: [],
+        preparedImages: [],
+        skippedImages: []
+      };
+    }
+    const maxImages = Math.max(1, Number(apiConfig.maxImagesPerRequest || 6));
+    const maxImageBytes = Math.max(1, Number(apiConfig.maxImageBytes || 4 * 1024 * 1024));
+    const maxTotalImageBytes = Math.max(1, Number(apiConfig.maxTotalImageBytes || 12 * 1024 * 1024));
+    const detail = normalizeText2(apiConfig.imageDetail) || "auto";
+    const requestImpl = options.requestImpl;
+    const fetchImpl = options.fetchImpl;
+    const baseUrl = options.baseUrl || DEFAULT_BASE_URL;
+    const imageInputs = [];
+    const preparedImages = [];
+    const skippedImages = [];
+    let totalBytes = 0;
+    for (const image of Array.isArray(images) ? images : []) {
+      if (imageInputs.length >= maxImages) {
+        skippedImages.push({ ...image, reason: "max-images-exceeded" });
+        continue;
+      }
+      try {
+        let prepared;
+        if (/^data:image\//i.test(image?.url || "")) {
+          prepared = parseDataImageUrl(image.url);
+          if (!prepared) {
+            skippedImages.push({ ...image, reason: "unsupported-data-image" });
+            continue;
+          }
+        } else if (isTrustedDiscourseImageUrl(image?.url, baseUrl)) {
+          prepared = await downloadImageAsDataUrl(image, {
+            requestImpl,
+            fetchImpl,
+            maxImageBytes
+          });
+          prepared = {
+            url: prepared.dataUrl,
+            mimeType: prepared.mimeType,
+            byteLength: prepared.byteLength,
+            compressed: prepared.compressed
+          };
+        } else {
+          skippedImages.push({ ...image, reason: "external-image" });
+          continue;
+        }
+        if (prepared.byteLength > maxImageBytes) {
+          skippedImages.push({ ...image, reason: "max-image-bytes-exceeded" });
+          continue;
+        }
+        if (totalBytes + prepared.byteLength > maxTotalImageBytes) {
+          skippedImages.push({ ...image, reason: "max-total-image-bytes-exceeded" });
+          continue;
+        }
+        totalBytes += prepared.byteLength;
+        const imageInput = {
+          id: image.id,
+          url: prepared.url,
+          detail
+        };
+        imageInputs.push(imageInput);
+        preparedImages.push({
+          ...image,
+          mimeType: prepared.mimeType,
+          byteLength: prepared.byteLength,
+          compressed: prepared.compressed === true
+        });
+      } catch (error) {
+        skippedImages.push({
+          ...image,
+          reason: "download-failed",
+          error: error?.message || String(error)
+        });
+      }
+    }
+    return {
+      imageInputs,
+      preparedImages,
+      skippedImages
+    };
+  }
+
   // src/features/topicPage/index.js
   var DEFAULT_FULL_FLOOR_END = 9999;
+  var TOPIC_IMAGE_BASE_URL = "https://linux.do/";
+  var CONTENT_RATE_LIMIT_INITIAL_DELAY_SECONDS = 10;
+  var LINUX_DO_CONTENT_RATE_LIMIT_EXHAUSTED = "LINUX_DO_CONTENT_RATE_LIMIT_EXHAUSTED";
+  function normalizeContentRetryCount(value) {
+    const parsed = parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, parsed);
+  }
+  function isLinuxDoContentUrl(url) {
+    try {
+      const parsed = new URL(String(url));
+      if (parsed.origin !== "https://linux.do") return false;
+      return /^\/t\/[^/]+\/(?:post_ids|posts)\.json$/.test(parsed.pathname) || /^\/t\/[^/]+\.json$/.test(parsed.pathname);
+    } catch (error) {
+      return false;
+    }
+  }
+  function defaultContentRetryWait(seconds) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, seconds) * 1e3));
+  }
+  function createContentRateLimitExhaustedError(url, retryCount, response) {
+    const attempts = retryCount + 1;
+    const error = new Error(
+      `HTTP error 429 fetching Linux DO content after ${attempts} attempt${attempts === 1 ? "" : "s"}`
+    );
+    error.name = "LinuxDoContentRateLimitError";
+    error.code = LINUX_DO_CONTENT_RATE_LIMIT_EXHAUSTED;
+    error.status = 429;
+    error.retryable = false;
+    error.url = String(url);
+    error.retryCount = retryCount;
+    error.attempts = attempts;
+    error.response = response;
+    return error;
+  }
+  async function fetchLinuxDoContentWith429Retry(url, fetchOptions, options = {}) {
+    const fetchImpl = typeof options.fetchImpl === "function" ? options.fetchImpl : globalThis.fetch;
+    if (typeof fetchImpl !== "function") {
+      throw new TypeError("fetch implementation is required");
+    }
+    const retryCount = normalizeContentRetryCount(options.retryCount);
+    const waitForRetry = typeof options.waitForRetry === "function" ? options.waitForRetry : defaultContentRetryWait;
+    const onRetry = typeof options.onRetry === "function" ? options.onRetry : null;
+    const shouldHandleRateLimit = isLinuxDoContentUrl(url);
+    let retryAttempt = 0;
+    while (true) {
+      const response = await fetchImpl(url, fetchOptions);
+      if (!shouldHandleRateLimit || response?.status !== 429) {
+        return response;
+      }
+      if (retryAttempt >= retryCount) {
+        throw createContentRateLimitExhaustedError(url, retryCount, response);
+      }
+      const delaySeconds = CONTENT_RATE_LIMIT_INITIAL_DELAY_SECONDS * 2 ** retryAttempt;
+      const retryInfo = {
+        url: String(url),
+        status: 429,
+        delaySeconds,
+        retryAttempt: retryAttempt + 1,
+        retryCount
+      };
+      if (onRetry) {
+        await onRetry(retryInfo);
+      }
+      await waitForRetry(delaySeconds, retryInfo);
+      retryAttempt += 1;
+    }
+  }
   function createTopicSummaryFeature(deps = {}) {
     const {
       state: state2,
@@ -10744,15 +12587,18 @@ ${error.stack}`);
       extractTopicId: extractTopicId2,
       isTopicPageUrl: isTopicPageUrl2,
       loadHistoryIntoSidebar,
-      setTopicTitle: setTopicTitle2
+      setTopicTitle: setTopicTitle2,
+      imageRequest,
+      waitForContentRetry,
+      onContentFetchRetry
     } = deps;
     const sidebarDriveHistoryPullingTopics = /* @__PURE__ */ new Set();
-    function normalizeTopicId2(topicId) {
+    function normalizeTopicId4(topicId) {
       if (topicId === null || topicId === void 0) return "";
       return String(topicId).trim();
     }
     function getTopicSummaryState(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       const hasLocalHistory = normalizedTopicId ? getSummaryHistory2(normalizedTopicId).length > 0 : false;
       const hasSummaryState = normalizedTopicId ? hasLocalHistory || isTopicMarkedSummarized2(normalizedTopicId) : false;
       return {
@@ -10771,6 +12617,37 @@ ${error.stack}`);
     function isNonRetryableSummaryError(error) {
       if (!error || typeof error !== "object") return false;
       return error.retryable === false || error.code === "CONTENT_FILTER_BLOCKED";
+    }
+    function getContentRetryCount(operationApi = null) {
+      const currentApiConfig = operationApi || (typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : null);
+      const source = currentApiConfig?.retryCount ?? state2?.autoRetryCount ?? 0;
+      if (typeof normalizeAutoRetryCount2 === "function") {
+        return normalizeContentRetryCount(
+          normalizeAutoRetryCount2(source, state2?.autoRetryCount ?? 0)
+        );
+      }
+      return normalizeContentRetryCount(source);
+    }
+    function fetchLinuxDoTopicContent(url, fetchOptions, context = {}) {
+      return fetchLinuxDoContentWith429Retry(url, fetchOptions, {
+        retryCount: getContentRetryCount(context.currentApi),
+        waitForRetry: waitForContentRetry,
+        onRetry: async (retryInfo) => {
+          const event = { ...retryInfo, ...context };
+          if (typeof onContentFetchRetry === "function") {
+            await onContentFetchRetry(event);
+            return;
+          }
+          if (typeof createToast2 === "function") {
+            createToast2(
+              `内容提取返回 429，${retryInfo.delaySeconds} 秒后重试 (${retryInfo.retryAttempt}/${retryInfo.retryCount})...`,
+              "warning",
+              null,
+              context.topicId
+            );
+          }
+        }
+      });
     }
     function updateSidebarSubmitButtonState2(topicId) {
       const submitButton = document.getElementById("submit-button");
@@ -10824,10 +12701,10 @@ ${error.stack}`);
       }
     }
     function setTopicRetryVisualState(topicId, isRetrying) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return;
       const buildingInput = document.getElementById("building");
-      if (!buildingInput || normalizeTopicId2(buildingInput.value) === normalizedTopicId) {
+      if (!buildingInput || normalizeTopicId4(buildingInput.value) === normalizedTopicId) {
         toggleClass(document.getElementById("submit-button"), "retrying", isRetrying);
         document.querySelectorAll("#summary-result .loading-indicator").forEach((indicator) => {
           toggleClass(indicator, "retrying", isRetrying);
@@ -10885,19 +12762,85 @@ ${error.stack}`);
       resultDiv.appendChild(contentWrapper);
       resultDiv.style.display = "flex";
     }
-    function formatDialogues(json) {
+    function createTopicContentAccumulator() {
+      return {
+        dialogues: [],
+        images: [],
+        skippedImages: [],
+        seenImageUrls: /* @__PURE__ */ new Set(),
+        nextImageId: 1
+      };
+    }
+    function appendPostImagesToAccumulator(post, cooked, accumulator, fallbackFloor) {
+      const username = post?.username || "未知用户";
+      const floor = post?.post_number || fallbackFloor || "";
+      const extracted = extractImagesFromCooked(cooked, { baseUrl: TOPIC_IMAGE_BASE_URL });
+      const postImages = [];
+      extracted.images.forEach((image) => {
+        const urlKey = image.url;
+        if (!urlKey) {
+          accumulator.skippedImages.push({
+            ...image,
+            username,
+            floor,
+            reason: "missing-url"
+          });
+          return;
+        }
+        if (accumulator.seenImageUrls.has(urlKey)) {
+          accumulator.skippedImages.push({
+            ...image,
+            username,
+            floor,
+            reason: "duplicate-image"
+          });
+          return;
+        }
+        accumulator.seenImageUrls.add(urlKey);
+        const normalizedImage = {
+          ...image,
+          id: accumulator.nextImageId,
+          username,
+          floor
+        };
+        accumulator.nextImageId += 1;
+        accumulator.images.push(normalizedImage);
+        postImages.push(normalizedImage);
+      });
+      extracted.skippedImages.forEach((image) => {
+        accumulator.skippedImages.push({
+          ...image,
+          username,
+          floor
+        });
+      });
+      return postImages;
+    }
+    function formatDialogues(json, accumulator = createTopicContentAccumulator()) {
       if (!json?.post_stream?.posts) return [];
-      return json.post_stream.posts.map((post) => {
+      return json.post_stream.posts.map((post, index) => {
         const cooked = post.cooked || "";
         const username = post.username || "未知用户";
         const replyToUsername = post.reply_to_user?.username;
-        return replyToUsername ? `${username}回复${replyToUsername}说：${cooked}` : `${username}说：${cooked}`;
+        const postImages = appendPostImagesToAccumulator(
+          post,
+          cooked,
+          accumulator,
+          accumulator.dialogues.length + index + 1
+        );
+        const imageText = postImages.length > 0 ? `
+${postImages.map(formatImagePlaceholder).join("\n")}` : "";
+        return replyToUsername ? `${username}回复${replyToUsername}说：${cooked}${imageText}` : `${username}说：${cooked}${imageText}`;
       });
     }
-    async function fetchTopicPostIds(topicId) {
+    async function fetchTopicPostIds(topicId, currentApi = null) {
       if (!topicId) throw new Error("Missing topicId");
       const postIdsUrl = `https://linux.do/t/${topicId}/post_ids.json`;
-      const idResponse = await fetch(postIdsUrl, getFetchOptions2());
+      const idResponse = await fetchLinuxDoTopicContent(postIdsUrl, getFetchOptions2(), {
+        topicId: normalizeTopicId4(topicId),
+        requestKind: "post_ids",
+        currentApi
+      });
       if (!idResponse.ok) {
         throw new Error(`HTTP error ${idResponse.status} fetching post IDs`);
       }
@@ -10912,30 +12855,53 @@ ${error.stack}`);
       const endFloor = Math.min(totalPosts, Math.max(1, maxEnd));
       return { startFloor: 1, endFloor };
     }
-    async function getFullFloorRangeForTopic(topicId, maxEnd = DEFAULT_FULL_FLOOR_END) {
-      const postIds = await fetchTopicPostIds(topicId);
+    async function getFullFloorRangeForTopic(topicId, maxEnd = DEFAULT_FULL_FLOOR_END, currentApi = null) {
+      const postIds = await fetchTopicPostIds(topicId, currentApi);
       if (!postIds || postIds.length === 0) {
         throw new Error("No post_ids returned");
       }
       return getFullFloorRangeFromPostIds(postIds, maxEnd);
     }
-    async function json_to_txt(building, startFloor, endFloor) {
-      const urls = await postid_to_url(building, startFloor, endFloor);
+    async function buildTopicContentContext(building, startFloor, endFloor, currentApi = null) {
+      const urls = await postid_to_url(building, startFloor, endFloor, currentApi);
       if (!urls || urls.length === 0) {
-        return [];
+        return {
+          dialogues: [],
+          contentText: "",
+          images: [],
+          skippedImages: []
+        };
       }
-      let allDialogues = [];
+      const accumulator = createTopicContentAccumulator();
       const fetchOptions = getFetchOptions2();
       for (const url of urls) {
-        const response = await fetch(url, fetchOptions);
+        const response = await fetchLinuxDoTopicContent(url, fetchOptions, {
+          topicId: normalizeTopicId4(building),
+          requestKind: "posts",
+          currentApi
+        });
         if (!response.ok) {
           throw new Error(`HTTP error ${response.status} fetching posts`);
         }
         const json = await response.json();
-        const dialogues = formatDialogues(json);
-        allDialogues = allDialogues.concat(dialogues);
+        const dialogues = formatDialogues(json, accumulator);
+        accumulator.dialogues = accumulator.dialogues.concat(dialogues);
       }
-      return allDialogues;
+      return {
+        dialogues: accumulator.dialogues,
+        contentText: accumulator.dialogues.join("\n\n"),
+        images: accumulator.images,
+        skippedImages: accumulator.skippedImages
+      };
+    }
+    async function prepareTopicImagesForCurrentApi(topicContent, operationApi = null) {
+      const currentApi = operationApi || getCurrentApiConfiguration2?.() || {};
+      return prepareImageInputsForApi(topicContent?.images || [], {
+        apiConfig: currentApi,
+        requestImpl: imageRequest,
+        fetchImpl: typeof fetch === "function" ? fetch : void 0,
+        baseUrl: TOPIC_IMAGE_BASE_URL
+      });
     }
     function safeSlice(arr, start, end) {
       if (!Array.isArray(arr)) return [];
@@ -10943,9 +12909,9 @@ ${error.stack}`);
       end = end === void 0 || end > arr.length ? arr.length : end;
       return arr.slice(start, end);
     }
-    async function postid_to_url(building, startFloor, endFloor) {
+    async function postid_to_url(building, startFloor, endFloor, currentApi = null) {
       const fetchOptions = getFetchOptions2();
-      const allPostIds = await fetchTopicPostIds(building);
+      const allPostIds = await fetchTopicPostIds(building, currentApi);
       let targetPostIds = [];
       if (startFloor === 1 && endFloor >= allPostIds.length) {
         targetPostIds = allPostIds;
@@ -10953,7 +12919,11 @@ ${error.stack}`);
         targetPostIds = safeSlice(allPostIds, startFloor - 1, endFloor);
         if (startFloor === 1) {
           const topicUrl = `https://linux.do/t/${building}.json`;
-          const topicResponse = await fetch(topicUrl, fetchOptions);
+          const topicResponse = await fetchLinuxDoTopicContent(topicUrl, fetchOptions, {
+            topicId: normalizeTopicId4(building),
+            requestKind: "topic",
+            currentApi
+          });
           if (topicResponse.ok) {
             const topicJson = await topicResponse.json();
             const firstPostId = topicJson?.post_stream?.posts?.[0]?.id;
@@ -10981,20 +12951,39 @@ ${error.stack}`);
       }
       return urls;
     }
-    async function main(building, startFloor, endFloor, retryAttempt = 0) {
+    async function main(building, startFloor, endFloor, retryAttempt = 0, operationApi = null) {
+      const currentApi = operationApi || {
+        ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
+      };
       try {
         const topicTitle = typeof ensureTopicTitle2 === "function" ? await ensureTopicTitle2(building) : getTopicTitle2?.(building);
-        const content = await json_to_txt(building, startFloor, endFloor);
-        if (!content || content.length === 0) {
+        const topicContent = await buildTopicContentContext(
+          building,
+          startFloor,
+          endFloor,
+          currentApi
+        );
+        if (!topicContent?.contentText) {
           throw new Error("未能获取到帖子内容");
         }
+        const imageContext = await prepareTopicImagesForCurrentApi(topicContent, currentApi);
+        const imageInstruction = imageContext.imageInputs?.length ? `本次请求附带了 ${imageContext.imageInputs.length} 张话题图片，请结合图片视觉内容和正文中的 [图片#] 占位符理解。` : "";
         const prompt = [
           "请基于以上要求，对下面的话题及其讨论回复进行总结。",
           topicTitle ? `话题标题：${topicTitle}` : `话题ID：${building}`,
+          imageInstruction,
           "原文如下：",
-          content.join("\n\n")
-        ].join("\n");
-        const summary = await summarizeSomething2(prompt);
+          topicContent.contentText
+        ].filter(Boolean).join("\n");
+        const summary = await summarizeSomething2(prompt, {
+          currentApi,
+          imageInputs: imageContext.imageInputs,
+          images: topicContent.images,
+          skippedImages: [
+            ...topicContent.skippedImages || [],
+            ...imageContext.skippedImages || []
+          ]
+        });
         if (!summary) {
           throw new Error("API返回了空的总结内容");
         }
@@ -11003,7 +12992,7 @@ ${error.stack}`);
         }
         return summary;
       } catch (error) {
-        const currentApiConfig = getCurrentApiConfiguration2();
+        const currentApiConfig = currentApi;
         const retryCount = normalizeAutoRetryCount2(currentApiConfig && currentApiConfig.retryCount, state2.autoRetryCount);
         const retryInterval = normalizeAutoRetryInterval2(currentApiConfig && currentApiConfig.retryInterval, state2.autoRetryInterval);
         state2.autoRetryCount = retryCount;
@@ -11012,7 +13001,7 @@ ${error.stack}`);
           setTopicRetryVisualState(building, true);
           createToast2(`总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`, "warning", null, building);
           await new Promise((resolve) => setTimeout(resolve, retryInterval * 1e3));
-          return main(building, startFloor, endFloor, retryAttempt + 1);
+          return main(building, startFloor, endFloor, retryAttempt + 1, currentApi);
         }
         setTopicRetryVisualState(building, false);
         if (isNonRetryableSummaryError(error)) {
@@ -11023,21 +13012,40 @@ ${error.stack}`);
         throw finalError;
       }
     }
-    async function buildTopicQuestionContext(topicId) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+    async function buildTopicQuestionContext(topicId, operationApi = null) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) {
         throw new Error("Missing topicId");
       }
+      const currentApi = operationApi || {
+        ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
+      };
       const topicTitle = typeof ensureTopicTitle2 === "function" ? await ensureTopicTitle2(normalizedTopicId) : getTopicTitle2?.(normalizedTopicId);
-      const { startFloor, endFloor } = await getFullFloorRangeForTopic(normalizedTopicId);
-      const content = await json_to_txt(normalizedTopicId, startFloor, endFloor);
-      if (!content || content.length === 0) {
+      const { startFloor, endFloor } = await getFullFloorRangeForTopic(
+        normalizedTopicId,
+        DEFAULT_FULL_FLOOR_END,
+        currentApi
+      );
+      const topicContent = await buildTopicContentContext(
+        normalizedTopicId,
+        startFloor,
+        endFloor,
+        currentApi
+      );
+      if (!topicContent?.contentText) {
         throw new Error("未能获取到帖子内容");
       }
+      const imageContext = await prepareTopicImagesForCurrentApi(topicContent, currentApi);
       return {
         topicId: normalizedTopicId,
         title: topicTitle || getTopicTitle2?.(normalizedTopicId) || "",
-        contentText: content.join("\n\n")
+        contentText: topicContent.contentText,
+        images: topicContent.images,
+        skippedImages: [
+          ...topicContent.skippedImages || [],
+          ...imageContext.skippedImages || []
+        ],
+        imageInputs: imageContext.imageInputs
       };
     }
     async function handleFormSubmit2(event) {
@@ -11052,7 +13060,7 @@ ${error.stack}`);
         console.error("Sidebar form elements not found!");
         return;
       }
-      const topicId = normalizeTopicId2(topicIdInput.value);
+      const topicId = normalizeTopicId4(topicIdInput.value);
       if (!topicId) {
         createToast2("无法获取当前主题ID！", "error");
         return;
@@ -11101,6 +13109,8 @@ ${error.stack}`);
       if (hasManualFallbackArmed) {
         pendingManualAfterDriveFailTopics2.delete(topicId);
       }
+      state2.summarizingTopics.add(topicId);
+      updateSidebarSubmitButtonState2(topicId);
       resultDiv.innerHTML = "";
       const contentWrapper = document.createElement("div");
       contentWrapper.className = "summary-content-wrapper";
@@ -11115,44 +13125,30 @@ ${error.stack}`);
       historyDiv.style.display = "none";
       const historyButton = document.getElementById("history-button");
       if (historyButton) historyButton.classList.remove("active");
-      let startFloor;
-      let endFloor;
+      const summarizingToast = createSummarizingToast2(topicId);
+      const requestContext = captureCurrentSummaryRequestContext2();
+      const operationApi = {
+        ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
+      };
       try {
-        const postIds = await fetchTopicPostIds(topicId);
+        let startFloor;
+        let endFloor;
+        const postIds = await fetchTopicPostIds(topicId, operationApi);
         if (!postIds || postIds.length === 0) {
           throw new Error("未能获取楼层信息");
         }
         ({ startFloor, endFloor } = getFullFloorRangeFromPostIds(postIds));
-      } catch (error) {
-        createToast2("无法获取楼层范围！", "error", null, topicId);
-        displayError(`错误：${error.message}`);
-        updateSidebarSubmitButtonState2(topicId);
-        return;
-      }
-      if (Number.isNaN(startFloor) || Number.isNaN(endFloor)) {
-        createToast2("无法获取有效的楼层范围！", "error", null, topicId);
-        displayError("错误：无法获取有效的楼层范围！");
-        updateSidebarSubmitButtonState2(topicId);
-        return;
-      }
-      if (endFloor < startFloor) {
-        createToast2("结束楼层不得小于起始楼层！", "error", null, topicId);
-        displayError("错误：结束楼层不得小于起始楼层！");
-        updateSidebarSubmitButtonState2(topicId);
-        return;
-      }
-      const maxFloorRange = 1e4;
-      if (endFloor - startFloor + 1 > maxFloorRange) {
-        createToast2(`楼层范围不能超过${maxFloorRange}楼！`, "error", null, topicId);
-        displayError(`错误：楼层范围不能超过${maxFloorRange}楼！`);
-        updateSidebarSubmitButtonState2(topicId);
-        return;
-      }
-      state2.summarizingTopics.add(topicId);
-      updateSidebarSubmitButtonState2(topicId);
-      const summarizingToast = createSummarizingToast2(topicId);
-      const requestContext = captureCurrentSummaryRequestContext2();
-      main(topicId, startFloor, endFloor).then((summary) => {
+        if (Number.isNaN(startFloor) || Number.isNaN(endFloor)) {
+          throw new Error("无法获取有效的楼层范围！");
+        }
+        if (endFloor < startFloor) {
+          throw new Error("结束楼层不得小于起始楼层！");
+        }
+        const maxFloorRange = 1e4;
+        if (endFloor - startFloor + 1 > maxFloorRange) {
+          throw new Error(`楼层范围不能超过${maxFloorRange}楼！`);
+        }
+        const summary = await main(topicId, startFloor, endFloor, 0, operationApi);
         if (!summary) {
           throw new Error("生成总结失败 (空响应)");
         }
@@ -11171,19 +13167,20 @@ ${error.stack}`);
             updateSidebarSubmitButtonState2(topicId);
           }, 3e3);
         }
-      }).catch((error) => {
+      } catch (error) {
         console.error("Summary failed:", error);
-        displayError(`发生错误: ${error.message}`);
+        const message = error?.message || String(error || "未知错误");
+        displayError(`发生错误: ${message}`);
         summarizingToast.changeType("error");
-        summarizingToast.update(`总结失败: ${error.message}`);
-      }).finally(() => {
+        summarizingToast.update(`总结失败: ${message}`);
+      } finally {
         state2.summarizingTopics.delete(topicId);
         updateTopicSummaryButtons?.(topicId);
         if (submitButton && !submitButton.classList.contains("summarized")) {
           updateSidebarSubmitButtonState2(topicId);
         }
         updateTopicSummaryButtons?.(topicId);
-      });
+      }
     }
     async function attemptAutoSummarize2(topicId) {
       if (!state2.newTopicAutoSummarize) return;
@@ -11197,11 +13194,18 @@ ${error.stack}`);
       getTopicTitle2?.(topicId);
       const summarizingToast = createSummarizingToast2(topicId);
       const requestContext = captureCurrentSummaryRequestContext2();
+      const operationApi = {
+        ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
+      };
       state2.summarizingTopics.add(topicId);
       updateSidebarSubmitButtonState2(topicId);
       try {
-        const { startFloor, endFloor } = await getFullFloorRangeForTopic(topicId);
-        const summary = await main(topicId, startFloor, endFloor);
+        const { startFloor, endFloor } = await getFullFloorRangeForTopic(
+          topicId,
+          DEFAULT_FULL_FLOOR_END,
+          operationApi
+        );
+        const summary = await main(topicId, startFloor, endFloor, 0, operationApi);
         summarizingToast.changeType("success");
         summarizingToast.update("话题自动总结完成！");
         saveSummaryHistory2(topicId, summary, requestContext.model, requestContext);
@@ -11229,7 +13233,7 @@ ${error.stack}`);
       force = false,
       probeOnly = false
     } = {}) {
-      const normalizedTopicId = normalizeTopicId2(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return { ok: false, skipped: true, reason: "invalid-topic-id" };
       if (typeof pullTopicHistoryFromDrive2 !== "function") {
         return { ok: false, skipped: true, reason: "drive-api-unavailable" };
@@ -11335,9 +13339,9 @@ ${error.stack}`);
     }
     async function loadHistoryForCurrentTopic2(options = {}) {
       const forceDrivePull = options.forceDrivePull === true;
-      const requestedTopicId = normalizeTopicId2(options.topicId);
+      const requestedTopicId = normalizeTopicId4(options.topicId);
       const topicIdInput = document.getElementById("building");
-      const topicIdFromInput = topicIdInput ? normalizeTopicId2(topicIdInput.value) : "";
+      const topicIdFromInput = topicIdInput ? normalizeTopicId4(topicIdInput.value) : "";
       const topicId = requestedTopicId || topicIdFromInput;
       if (!topicId) return;
       if (topicIdInput && topicIdInput.value !== topicId) {
@@ -11345,7 +13349,7 @@ ${error.stack}`);
       }
       const onTopicPage = typeof isTopicPageUrl2 === "function" ? isTopicPageUrl2(state2.currentPageUrl) : /\/t\/topic\/\d+/.test(window.location.href);
       if (!onTopicPage) return;
-      const activeTopicId = typeof extractTopicId2 === "function" ? normalizeTopicId2(extractTopicId2()) : "";
+      const activeTopicId = typeof extractTopicId2 === "function" ? normalizeTopicId4(extractTopicId2()) : "";
       if (activeTopicId && activeTopicId !== topicId) return;
       const historyDiv = document.getElementById("summary-history");
       if (!(historyDiv && typeof historyDiv.loadHistory === "function")) {
@@ -11401,6 +13405,7 @@ ${error.stack}`);
       fetchTopicPostIds,
       getFullFloorRangeFromPostIds,
       main,
+      buildTopicContentContext,
       buildTopicQuestionContext,
       ensureSidebarTopicHistoryFromDrive,
       displayError
@@ -11429,6 +13434,52 @@ ${error.stack}`);
       }
     });
   }
+  var DRIVE_DEARROW_STORAGE_VERSION = 1;
+  function normalizeDriveDeArrowTimestamp(value) {
+    const text = value === null || value === void 0 ? "" : String(value).trim();
+    if (!text) return "";
+    const parsed = Date.parse(text);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : "";
+  }
+  function createDriveDeArrowSafetyError(message, code = "DRIVE_DEARROW_INVALID_STATE") {
+    const error = new Error(message);
+    error.code = code;
+    error.retryable = false;
+    return error;
+  }
+  function normalizeDriveDeArrowTopicStates(rawStates) {
+    return normalizeDeArrowTopicStates(rawStates);
+  }
+  function mergeDriveDeArrowTopicStates(leftStates, rightStates) {
+    return mergeDeArrowTopicStates(leftStates, rightStates);
+  }
+  function normalizeDriveDeArrowPayload(rawPayload, {
+    storageVersion = DRIVE_DEARROW_STORAGE_VERSION,
+    normalizeTopicStates = normalizeDriveDeArrowTopicStates
+  } = {}) {
+    if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+      throw createDriveDeArrowSafetyError("Drive DeArrow state must be a JSON object.");
+    }
+    const parsedVersion = Number(rawPayload.version);
+    if (!Number.isInteger(parsedVersion) || parsedVersion < 1) {
+      throw createDriveDeArrowSafetyError("Drive DeArrow state has an invalid or missing version.");
+    }
+    if (parsedVersion > storageVersion) {
+      throw createDriveDeArrowSafetyError(
+        `Drive DeArrow state version ${parsedVersion} is newer than supported version ${storageVersion}; refusing to overwrite it.`,
+        "DRIVE_DEARROW_FUTURE_VERSION"
+      );
+    }
+    const rawTopics = rawPayload.topics ?? rawPayload.states;
+    if (!rawTopics || typeof rawTopics !== "object" || Array.isArray(rawTopics)) {
+      throw createDriveDeArrowSafetyError("Drive DeArrow state is missing a valid topics map.");
+    }
+    return {
+      version: storageVersion,
+      updatedAt: normalizeDriveDeArrowTimestamp(rawPayload.updatedAt),
+      topics: normalizeTopicStates(rawTopics)
+    };
+  }
   function createDriveSummaryFeature(deps = {}) {
     const {
       getDriveSummarySettings,
@@ -11441,6 +13492,10 @@ ${error.stack}`);
       setSummaryHistoryMapSnapshot: setSummaryHistoryMapSnapshot2,
       getTopicQuestionHistoryMapSnapshot: getTopicQuestionHistoryMapSnapshot2,
       setTopicQuestionHistoryMapSnapshot: setTopicQuestionHistoryMapSnapshot2,
+      getDeArrowTopicStates: injectedGetDeArrowTopicStates,
+      setDeArrowTopicStates: injectedSetDeArrowTopicStates,
+      normalizeDeArrowTopicStates: injectedNormalizeDeArrowTopicStates,
+      mergeDeArrowTopicStates: injectedMergeDeArrowTopicStates,
       replaceSummaryTopicIdsFromHistoryMap: replaceSummaryTopicIdsFromHistoryMap2,
       syncSummaryTopicIdsFromSources: syncSummaryTopicIdsFromSources2,
       markTopicSummarized: markTopicSummarized2,
@@ -11455,6 +13510,9 @@ ${error.stack}`);
       DRIVE_SUMMARY_INDEX_FILENAME = "summary-index.v2.json",
       DRIVE_SUMMARY_TOPICS_FOLDER_NAME = "topics",
       DRIVE_SUMMARY_STORAGE_VERSION = 3,
+      DRIVE_DEARROW_FILENAME = "dearrow-state.v1.json",
+      DRIVE_DEARROW_STORAGE_VERSION: driveDeArrowStorageVersion = DRIVE_DEARROW_STORAGE_VERSION,
+      DRIVE_DEARROW_DIRTY_KEY = "dearrowDriveDirty",
       DRIVE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token",
       DRIVE_TOKEN_ENDPOINT_FALLBACKS = [
         "https://www.googleapis.com/oauth2/v4/token",
@@ -11472,6 +13530,10 @@ ${error.stack}`);
       ],
       DRIVE_SUMMARY_TOPIC_LIMIT = 100
     } = deps;
+    const getDeArrowTopicStates = typeof injectedGetDeArrowTopicStates === "function" ? injectedGetDeArrowTopicStates : typeof deps.getTopicStates === "function" ? deps.getTopicStates : typeof deps.getDeArrowTopicStatesSnapshot === "function" ? deps.getDeArrowTopicStatesSnapshot : () => gmGetValue("dearrowTopicStates", {});
+    const setDeArrowTopicStates = typeof injectedSetDeArrowTopicStates === "function" ? injectedSetDeArrowTopicStates : typeof deps.setTopicStates === "function" ? deps.setTopicStates : typeof deps.setDeArrowTopicStatesSnapshot === "function" ? deps.setDeArrowTopicStatesSnapshot : (nextStates) => gmSetValue("dearrowTopicStates", nextStates);
+    const normalizeDeArrowTopicStates2 = typeof injectedNormalizeDeArrowTopicStates === "function" ? injectedNormalizeDeArrowTopicStates : normalizeDriveDeArrowTopicStates;
+    const mergeDeArrowTopicStates2 = typeof injectedMergeDeArrowTopicStates === "function" ? injectedMergeDeArrowTopicStates : mergeDriveDeArrowTopicStates;
     const driveSummarySettings2 = createLatestValueProxy(getDriveSummarySettings);
     let driveSummaryDirtyTopicIds2 = typeof getDriveSummaryDirtyTopicIds === "function" ? getDriveSummaryDirtyTopicIds() : null;
     let driveSummaryAccessToken = "";
@@ -11484,6 +13546,11 @@ ${error.stack}`);
     let driveSummaryRootFolderIdCache = "";
     let driveSummaryTopicsFolderIdCache = "";
     let driveSummaryTopicsFolderParentIdCache = "";
+    let driveDeArrowDirtyLoaded = false;
+    let driveDeArrowDirty = false;
+    let driveDeArrowDirtyRevision = 0;
+    let driveDeArrowPullAttempted = false;
+    let driveDeArrowPullPromise = null;
     const DRIVE_SYNC_REASON_PRIORITY = {
       auto: 1,
       queued: 2,
@@ -11511,6 +13578,12 @@ ${error.stack}`);
       driveSummaryRootFolderIdCache = "";
       driveSummaryTopicsFolderIdCache = "";
       driveSummaryTopicsFolderParentIdCache = "";
+      driveDeArrowPullAttempted = false;
+      driveDeArrowPullPromise = null;
+    }
+    function resetDriveDeArrowPullState2() {
+      driveDeArrowPullAttempted = false;
+      driveDeArrowPullPromise = null;
     }
     function hasDriveSummaryCredentials2(settings = driveSummarySettings2) {
       return Boolean(settings.clientId && settings.clientSecret && settings.refreshToken);
@@ -11594,6 +13667,51 @@ ${error.stack}`);
         persistDriveSummaryDirtyTopicIds();
       }
       return changed;
+    }
+    function ensureDriveDeArrowDirtyState() {
+      if (!driveDeArrowDirtyLoaded) {
+        driveDeArrowDirty = gmGetValue(DRIVE_DEARROW_DIRTY_KEY, false) === true;
+        driveDeArrowDirtyLoaded = true;
+      }
+      return driveDeArrowDirty;
+    }
+    function persistDriveDeArrowDirtyState() {
+      gmSetValue(DRIVE_DEARROW_DIRTY_KEY, driveDeArrowDirty === true);
+    }
+    function isDriveDeArrowDirty() {
+      return ensureDriveDeArrowDirtyState();
+    }
+    function markDriveDeArrowDirty2({ schedule = true } = {}) {
+      ensureDriveDeArrowDirtyState();
+      driveDeArrowDirty = true;
+      driveDeArrowDirtyRevision += 1;
+      persistDriveDeArrowDirtyState();
+      if (schedule) {
+        scheduleDriveSummarySync2("auto");
+      }
+      return driveDeArrowDirtyRevision;
+    }
+    function clearDriveDeArrowDirty(expectedRevision = null) {
+      ensureDriveDeArrowDirtyState();
+      if (expectedRevision !== null && expectedRevision !== driveDeArrowDirtyRevision) {
+        return false;
+      }
+      if (!driveDeArrowDirty) return false;
+      driveDeArrowDirty = false;
+      persistDriveDeArrowDirtyState();
+      return true;
+    }
+    function readLocalDeArrowTopicStates() {
+      return normalizeDeArrowTopicStates2(getDeArrowTopicStates() || {});
+    }
+    function writeLocalDeArrowTopicStates(nextStates, meta = {}) {
+      const normalized = normalizeDeArrowTopicStates2(nextStates || {});
+      setDeArrowTopicStates(normalized, {
+        source: "drive",
+        skipDriveSync: true,
+        ...meta
+      });
+      return normalized;
     }
     function setDriveSummaryStatus(type, message) {
       const statusEl = document.getElementById("drive-summary-status");
@@ -12248,6 +14366,129 @@ ${error.stack}`);
         index
       };
     };
+    const createDriveDeArrowPayload = (topicStates, updatedAt = (/* @__PURE__ */ new Date()).toISOString()) => ({
+      version: driveDeArrowStorageVersion,
+      updatedAt: normalizeIsoTimestamp(updatedAt, (/* @__PURE__ */ new Date()).toISOString()),
+      topics: normalizeDeArrowTopicStates2(topicStates || {})
+    });
+    const parseDriveDeArrowPayloadText = (text) => {
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (error) {
+        throw createDriveDeArrowSafetyError(
+          `Drive DeArrow state parse failed: ${error?.message || String(error)}`,
+          "DRIVE_DEARROW_PARSE_FAILED"
+        );
+      }
+      try {
+        return normalizeDriveDeArrowPayload(json, {
+          storageVersion: driveDeArrowStorageVersion,
+          normalizeTopicStates: normalizeDeArrowTopicStates2
+        });
+      } catch (error) {
+        throw createDriveDeArrowSafetyError(
+          `Drive DeArrow state validation failed: ${error?.message || String(error)}`,
+          error?.code || "DRIVE_DEARROW_INVALID_STATE"
+        );
+      }
+    };
+    const loadDriveDeArrowState = async (rootFolderId) => {
+      let fileId;
+      try {
+        fileId = await findDriveFileIdByName(rootFolderId, DRIVE_DEARROW_FILENAME);
+      } catch (error) {
+        if (String(error?.message || "").includes("多个同名文件")) {
+          error.code = "DRIVE_DEARROW_DUPLICATE_FILES";
+          error.retryable = false;
+        }
+        throw error;
+      }
+      if (!fileId) {
+        return {
+          exists: false,
+          fileId: "",
+          payload: createDriveDeArrowPayload({}, "")
+        };
+      }
+      const text = await fetchDriveFileText(fileId, { allowNotFound: true });
+      if (text === null) {
+        return {
+          exists: false,
+          fileId: "",
+          payload: createDriveDeArrowPayload({}, "")
+        };
+      }
+      if (!text.trim()) {
+        throw createDriveDeArrowSafetyError(
+          "Drive DeArrow state file is empty; refusing to overwrite it.",
+          "DRIVE_DEARROW_EMPTY_FILE"
+        );
+      }
+      return {
+        exists: true,
+        fileId,
+        payload: parseDriveDeArrowPayloadText(text)
+      };
+    };
+    const mergeNormalizedDeArrowTopicStates = (localStates, remoteStates) => normalizeDeArrowTopicStates2(mergeDeArrowTopicStates2(
+      normalizeDeArrowTopicStates2(localStates || {}),
+      normalizeDeArrowTopicStates2(remoteStates || {})
+    ));
+    async function pullDeArrowStateFromDrive2({ silent = true, force = false } = {}) {
+      const localStates = readLocalDeArrowTopicStates();
+      if (!driveSummarySettings2.enabled) {
+        return { ok: false, skipped: true, states: localStates, error: new Error("Drive sync is disabled") };
+      }
+      if (!hasDriveSummaryCredentials2()) {
+        return { ok: false, skipped: true, states: localStates, error: new Error("Missing Drive credentials") };
+      }
+      if (!force && driveDeArrowPullPromise) {
+        return driveDeArrowPullPromise;
+      }
+      if (!force && driveDeArrowPullAttempted) {
+        return { ok: true, skipped: true, source: "session", states: localStates };
+      }
+      driveDeArrowPullAttempted = true;
+      const pullPromise = (async () => {
+        try {
+          const rootFolderId = await findDriveSummaryRootFolderId();
+          if (!rootFolderId) {
+            return { ok: true, source: "none", states: localStates };
+          }
+          const remoteState = await loadDriveDeArrowState(rootFolderId);
+          if (!remoteState.exists) {
+            return { ok: true, source: "none", states: localStates };
+          }
+          const mergedStates = mergeNormalizedDeArrowTopicStates(
+            readLocalDeArrowTopicStates(),
+            remoteState.payload.topics
+          );
+          writeLocalDeArrowTopicStates(mergedStates, { kind: "hydrate" });
+          return {
+            ok: true,
+            source: "drive-v1",
+            states: mergedStates,
+            remoteUpdatedAt: remoteState.payload.updatedAt || ""
+          };
+        } catch (error) {
+          const message = formatDriveSummaryError(error);
+          setDriveSummaryStatus("error", `DeArrow 拉取失败：${message}`);
+          if (!silent && typeof createSettingsToast2 === "function") {
+            createSettingsToast2(`DeArrow 拉取失败：${message}`, "error", 4e3);
+          }
+          return { ok: false, source: "none", states: localStates, error };
+        }
+      })();
+      driveDeArrowPullPromise = pullPromise;
+      try {
+        return await pullPromise;
+      } finally {
+        if (driveDeArrowPullPromise === pullPromise) {
+          driveDeArrowPullPromise = null;
+        }
+      }
+    }
     const getLatestTimestampFromHistory = (historyList) => {
       const normalizedList = normalizeSummaryHistoryList(historyList);
       let latestTime = 0;
@@ -12764,6 +15005,39 @@ ${error.stack}`);
       }
       throw new Error(`Drive upload HTTP ${response.status}: ${text || "[empty response]"}`);
     };
+    const syncDriveDeArrowStateToRoot = async ({ rootFolderId, localStates } = {}) => {
+      if (!rootFolderId) {
+        throw new Error("Drive root folder id is required for DeArrow sync.");
+      }
+      const remoteState = await loadDriveDeArrowState(rootFolderId);
+      const currentLocalStates = mergeNormalizedDeArrowTopicStates(
+        localStates || {},
+        readLocalDeArrowTopicStates()
+      );
+      const mergedStates = mergeNormalizedDeArrowTopicStates(
+        currentLocalStates,
+        remoteState.payload.topics
+      );
+      const payload = createDriveDeArrowPayload(mergedStates);
+      const uploadResult = await uploadSummaryContentToDrive({
+        content: JSON.stringify(payload, null, 2),
+        folderId: rootFolderId,
+        fileId: remoteState.fileId || "",
+        fileName: DRIVE_DEARROW_FILENAME,
+        mimeType: "application/json"
+      });
+      const latestMergedStates = mergeNormalizedDeArrowTopicStates(
+        mergedStates,
+        readLocalDeArrowTopicStates()
+      );
+      writeLocalDeArrowTopicStates(latestMergedStates, { kind: "sync" });
+      return {
+        fileId: typeof uploadResult?.id === "string" && uploadResult.id ? uploadResult.id : remoteState.fileId || "",
+        payload,
+        states: latestMergedStates,
+        topicCount: Object.keys(mergedStates).length
+      };
+    };
     const uploadDriveSummaryIndex = async (indexData, rootFolderId, fileId = "") => {
       const normalizedIndex = normalizeDriveSummaryIndex(indexData);
       normalizedIndex.version = DRIVE_SUMMARY_STORAGE_VERSION;
@@ -12930,13 +15204,38 @@ ${error.stack}`);
         localHistoryMap,
         localQuestionHistoryMap
       });
-      if (dirtyTopicIds.length === 0 && normalizedReason === "auto") {
-        return { ok: true, skipped: true, syncedTopicCount: 0 };
+      const deArrowDirtyAtStart = ensureDriveDeArrowDirtyState();
+      const deArrowDirtyRevisionAtStart = driveDeArrowDirtyRevision;
+      const localDeArrowTopicStates = deArrowDirtyAtStart ? readLocalDeArrowTopicStates() : {};
+      if (dirtyTopicIds.length === 0 && !deArrowDirtyAtStart && normalizedReason === "auto") {
+        return { ok: true, skipped: true, syncedTopicCount: 0, syncedDeArrowTopicCount: 0 };
       }
       driveSummarySyncInFlight = true;
-      setDriveSummaryStatus("info", dirtyTopicIds.length > 0 ? `正在同步 ${dirtyTopicIds.length} 个话题到 Drive...` : "正在检查并迁移 Drive 存储结构...");
+      let preventAutomaticRetry = false;
+      setDriveSummaryStatus("info", dirtyTopicIds.length > 0 ? `正在同步 ${dirtyTopicIds.length} 个话题到 Drive...` : deArrowDirtyAtStart ? "正在同步 DeArrow 状态到 Drive..." : "正在检查并迁移 Drive 存储结构...");
       try {
         const rootFolderId = await ensureDriveSummaryRootFolderId();
+        let syncedDeArrowTopicCount = 0;
+        if (deArrowDirtyAtStart) {
+          const deArrowSyncResult = await syncDriveDeArrowStateToRoot({
+            rootFolderId,
+            localStates: localDeArrowTopicStates
+          });
+          syncedDeArrowTopicCount = deArrowSyncResult.topicCount;
+          clearDriveDeArrowDirty(deArrowDirtyRevisionAtStart);
+        }
+        if (dirtyTopicIds.length === 0 && normalizedReason === "auto") {
+          const successMessage2 = `Drive 同步完成：DeArrow ${syncedDeArrowTopicCount} 个话题。`;
+          setDriveSummaryStatus("success", successMessage2);
+          if (!silent && typeof createSettingsToast2 === "function") {
+            createSettingsToast2(successMessage2, "success", 2800);
+          }
+          return {
+            ok: true,
+            syncedTopicCount: 0,
+            syncedDeArrowTopicCount
+          };
+        }
         let topicsFolderId = await getDriveSummaryTopicsFolderId(rootFolderId, { createIfMissing: false });
         let indexState = await loadDriveSummaryIndexState(rootFolderId);
         const migrationResult = await migrateLegacySummaryToV2IfNeeded({
@@ -12955,7 +15254,7 @@ ${error.stack}`);
               remoteIndex: indexState.index
             });
           }
-          const message = migrated ? `Drive 迁移完成：已拆分 ${migratedTopicCount} 个话题。` : "没有待同步的话题变更。";
+          const message = migrated ? `Drive 迁移完成：已拆分 ${migratedTopicCount} 个话题${syncedDeArrowTopicCount > 0 ? `，DeArrow ${syncedDeArrowTopicCount} 个话题` : ""}。` : syncedDeArrowTopicCount > 0 ? `Drive 同步完成：DeArrow ${syncedDeArrowTopicCount} 个话题。` : "没有待同步的话题变更。";
           setDriveSummaryStatus("success", message);
           if (!silent && typeof createSettingsToast2 === "function") {
             createSettingsToast2(message, migrated ? "success" : "info", 2600);
@@ -12965,7 +15264,8 @@ ${error.stack}`);
             skipped: !migrated,
             migrated,
             migratedTopicCount,
-            syncedTopicCount: 0
+            syncedTopicCount: 0,
+            syncedDeArrowTopicCount
           };
         }
         topicsFolderId = topicsFolderId || await getDriveSummaryTopicsFolderId(rootFolderId, { createIfMissing: true });
@@ -13012,7 +15312,8 @@ ${error.stack}`);
         });
         const migrateText = migrated ? `，并迁移 legacy ${migratedTopicCount} 个话题` : "";
         const trimText = trimResult.trimmed ? `，本地已安全裁剪到最近 ${trimResult.localTopicCount} 个话题` : "";
-        const successMessage = `Drive 同步完成：增量同步 ${syncedTopicCount} 个话题${migrateText}${trimText}。`;
+        const deArrowText = syncedDeArrowTopicCount > 0 ? `，DeArrow ${syncedDeArrowTopicCount} 个话题` : "";
+        const successMessage = `Drive 同步完成：增量同步 ${syncedTopicCount} 个话题${deArrowText}${migrateText}${trimText}。`;
         setDriveSummaryStatus("success", successMessage);
         if (!silent && typeof createSettingsToast2 === "function") {
           createSettingsToast2(successMessage, "success", 3200);
@@ -13020,11 +15321,13 @@ ${error.stack}`);
         return {
           ok: true,
           syncedTopicCount,
+          syncedDeArrowTopicCount,
           migrated,
           migratedTopicCount,
           trimmedLocalHistory: trimResult.trimmed
         };
       } catch (error) {
+        preventAutomaticRetry = error?.retryable === false;
         const message = formatDriveSummaryError(error);
         setDriveSummaryStatus("error", `上传失败：${message}`);
         if (!silent && typeof createSettingsToast2 === "function") {
@@ -13034,8 +15337,8 @@ ${error.stack}`);
       } finally {
         driveSummarySyncInFlight = false;
         const dirtySet = ensureDriveSummaryDirtySet();
-        const hasDirty = dirtySet.size > 0;
-        const shouldQueue = driveSummarySyncQueued || hasDirty;
+        const hasDirty = dirtySet.size > 0 || ensureDriveDeArrowDirtyState();
+        const shouldQueue = !preventAutomaticRetry && (driveSummarySyncQueued || hasDirty);
         const nextReason = shouldQueue ? mergeDriveSyncReason(driveSummaryQueuedReason, hasDirty ? "queued" : normalizedReason) : "auto";
         driveSummarySyncQueued = false;
         driveSummaryQueuedReason = "auto";
@@ -13043,6 +15346,12 @@ ${error.stack}`);
           scheduleDriveSummarySync2(nextReason);
         }
       }
+    }
+    async function uploadDeArrowStateToDrive2({ silent = true } = {}) {
+      if (!ensureDriveDeArrowDirtyState()) {
+        markDriveDeArrowDirty2({ schedule: false });
+      }
+      return uploadSummaryHistoryToDrive2({ reason: "auto", silent });
     }
     function scheduleDriveSummarySync2(reason = "auto") {
       if (!driveSummarySettings2.enabled) return;
@@ -13056,7 +15365,7 @@ ${error.stack}`);
         driveSummarySyncQueued = true;
         return;
       }
-      const hasDirty = ensureDriveSummaryDirtySet().size > 0;
+      const hasDirty = ensureDriveSummaryDirtySet().size > 0 || ensureDriveDeArrowDirtyState();
       const reasonToRun = driveSummaryQueuedReason;
       const allowNoDirtyRun = reasonToRun === "manual" || reasonToRun === "import";
       if (!hasDirty && !allowNoDirtyRun) {
@@ -13075,19 +15384,1716 @@ ${error.stack}`);
     }
     return {
       resetDriveSummaryAuthCache: resetDriveSummaryAuthCache2,
+      resetDriveDeArrowPullState: resetDriveDeArrowPullState2,
       hasDriveSummaryCredentials: hasDriveSummaryCredentials2,
       markDriveSummaryTopicDirty: markDriveSummaryTopicDirty2,
       markDriveSummaryTopicsDirty: markDriveSummaryTopicsDirty2,
       clearDriveSummaryTopicsDirty: clearDriveSummaryTopicsDirty2,
+      markDriveDeArrowDirty: markDriveDeArrowDirty2,
+      markDriveDeArrowStateDirty: markDriveDeArrowDirty2,
+      clearDriveDeArrowDirty,
+      isDriveDeArrowDirty,
       syncDriveSummarySettingsUI: syncDriveSummarySettingsUI2,
       updateDriveSummaryStatusHint: updateDriveSummaryStatusHint2,
       pullTopicHistoryFromDrive: pullTopicHistoryFromDrive2,
       pullTopicQuestionHistoryFromDrive: pullTopicQuestionHistoryFromDrive2,
+      pullDeArrowStateFromDrive: pullDeArrowStateFromDrive2,
+      hydrateDeArrowStateFromDriveOnce: pullDeArrowStateFromDrive2,
       rebuildSummaryTopicIdsFromDrive: rebuildSummaryTopicIdsFromDrive2,
       uploadSummaryHistoryToDrive: uploadSummaryHistoryToDrive2,
+      uploadDeArrowStateToDrive: uploadDeArrowStateToDrive2,
       scheduleDriveSummarySync: scheduleDriveSummarySync2,
       normalizeDriveSyncReason,
-      mergeDriveSyncReason
+      mergeDriveSyncReason,
+      normalizeDriveDeArrowTopicStates: normalizeDeArrowTopicStates2,
+      mergeDriveDeArrowTopicStates: mergeDeArrowTopicStates2
+    };
+  }
+
+  // src/features/dearrow/index.js
+  var DEARROW_BATCH_SIZE = 20;
+  var DEARROW_BUTTON_CLASS = "topic-dearrow-button";
+  var DEARROW_ICON_SVG = `<svg class="topic-dearrow-icon" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <path fill="#1213BD" d="M36 18.302c0 4.981-2.46 9.198-5.655 12.462s-7.323 5.152-12.199 5.152-9.764-1.112-12.959-4.376S0 23.283 0 18.302s2.574-9.38 5.769-12.644S13.271 0 18.146 0s9.394 2.178 12.589 5.442C33.931 8.706 36 13.322 36 18.302z" />
+    <path fill="#88c9f9" d="m 30.394282,18.410186 c 0,3.468849 -1.143025,6.865475 -3.416513,9.137917 -2.273489,2.272442 -5.670115,2.92874 -9.137918,2.92874 -3.467803,0 -6.373515,-1.147212 -8.6470033,-3.419654 -2.2734888,-2.272442 -3.5871299,-5.178154 -3.5871299,-8.647003 0,-3.46885 0.9420533,-6.746149 3.2144954,-9.0196379 2.2724418,-2.2734888 5.5507878,-3.9513905 9.0196378,-3.9513905 3.46885,0 6.492841,1.9322561 8.76633,4.204698 2.273489,2.2724424 3.788101,5.2974804 3.788101,8.7663304 z" />
+    <path fill="#0a62a5" d="m 23.95823,17.818306 c 0,3.153748 -2.644888,5.808102 -5.798635,5.808102 -3.153748,0 -5.599825,-2.654354 -5.599825,-5.808102 0,-3.153747 2.446077,-5.721714 5.599825,-5.721714 3.153747,0 5.798635,2.567967 5.798635,5.721714 z" />
+</svg>`;
+  var BUTTON_SEMANTIC_CLASSES = Object.freeze([
+    "is-unjudged",
+    "is-clickbait",
+    "is-neutral",
+    "is-rewritten"
+  ]);
+  var BUTTON_OPERATION_CLASSES = Object.freeze([
+    "is-checking",
+    "is-preparing",
+    "is-rewriting"
+  ]);
+  var BUTTON_STATE_CLASSES = Object.freeze([
+    ...BUTTON_SEMANTIC_CLASSES,
+    ...BUTTON_OPERATION_CLASSES,
+    "has-error"
+  ]);
+  var DEARROW_IMAGE_BASE_URL = "https://linux.do/";
+  function formatDeArrowImagePlaceholder(image) {
+    const compact = (value) => normalizeString2(value).replace(/\s+/g, " ").slice(0, 120);
+    const width = compact(image?.width);
+    const height = compact(image?.height);
+    const parts = [
+      `图片#${image?.id || "?"}`,
+      image?.floor ? `楼层:${image.floor}` : "",
+      image?.username ? `作者:${compact(image.username)}` : "",
+      image?.alt ? `alt:${compact(image.alt)}` : "",
+      image?.title ? `title:${compact(image.title)}` : "",
+      width || height ? `尺寸:${width || "?"}×${height || "?"}` : ""
+    ].filter(Boolean);
+    return `[${parts.join(" ")}]`;
+  }
+  var TITLE_SELECTORS = Object.freeze([
+    "a.raw-topic-link",
+    "a.title",
+    ".link-top-line a",
+    ".main-link a"
+  ]);
+  var SKIPPED_TITLE_CONTAINER_SELECTOR = [
+    ".badge-wrapper",
+    ".discourse-tags",
+    ".topic-statuses",
+    ".topic-list-icons",
+    ".sr-only",
+    ".visually-hidden",
+    ".svg-icon",
+    "svg",
+    "img"
+  ].join(",");
+  function normalizeString2(value) {
+    if (value === null || value === void 0) return "";
+    return String(value).trim();
+  }
+  function normalizeTopicId2(value) {
+    return normalizeString2(value);
+  }
+  function normalizeError(error, fallback = "未知错误") {
+    if (error instanceof Error && error.message) return error.message;
+    if (error && typeof error.message === "string" && error.message.trim()) return error.message.trim();
+    return normalizeString2(error) || fallback;
+  }
+  function getCompletionText(result) {
+    if (typeof result === "string") return result;
+    if (typeof result?.content === "string") return result.content;
+    if (typeof result?.text === "string") return result.text;
+    if (typeof result?.choices?.[0]?.message?.content === "string") {
+      return result.choices[0].message.content;
+    }
+    return "";
+  }
+  function extractJsonText(value) {
+    const text = normalizeString2(value);
+    if (!text) throw new Error("模型未返回内容");
+    const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    return fenced ? fenced[1].trim() : text;
+  }
+  function parseDeArrowJudgmentResponse(value) {
+    let parsed;
+    try {
+      parsed = JSON.parse(extractJsonText(getCompletionText(value) || value));
+    } catch (error) {
+      const parseError = new Error(`DeArrow 判定返回了无效 JSON：${normalizeError(error)}`);
+      parseError.code = "DEARROW_INVALID_JUDGMENT_JSON";
+      parseError.retryable = false;
+      throw parseError;
+    }
+    const source = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.results) ? parsed.results : Array.isArray(parsed?.topics) ? parsed.topics : null;
+    if (!source) {
+      const error = new Error("DeArrow 判定 JSON 必须包含 results 数组");
+      error.code = "DEARROW_INVALID_JUDGMENT_SHAPE";
+      error.retryable = false;
+      throw error;
+    }
+    const results = [];
+    const seen = /* @__PURE__ */ new Set();
+    source.forEach((item) => {
+      if (!item || typeof item !== "object") return;
+      const topicId = normalizeTopicId2(item.topicId ?? item.topic_id ?? item.id);
+      const verdict = item.verdict ?? item.isClickbait ?? item.clickbait;
+      if (!topicId || typeof verdict !== "boolean" || seen.has(topicId)) return;
+      seen.add(topicId);
+      results.push({
+        topicId,
+        verdict,
+        reason: normalizeString2(item.reason ?? item.verdictReason)
+      });
+    });
+    return results;
+  }
+  function buildDeArrowJudgmentMessages(topics) {
+    const normalizedTopics = Array.isArray(topics) ? topics.slice(0, DEARROW_BATCH_SIZE).map((topic) => ({
+      topicId: normalizeTopicId2(topic?.topicId),
+      title: normalizeString2(topic?.originalTitle ?? topic?.title)
+    })).filter((topic) => topic.topicId && topic.title) : [];
+    return [
+      {
+        role: "system",
+        content: [
+          "你是论坛标题质量判定器。你只能根据给定的标题判断，不得臆测帖子内容。",
+          "如果标题包含明显夸张、误导、刻意制造紧迫/恐慌，或用“震惊”“万万没想到”“这件事”等方式隐去关键信息诱导点击，标记为标题党。",
+          "普通的疑问、求助、幽默、简短或主观表达本身不等于标题党。",
+          '仅返回严格 JSON：{"results":[{"topicId":"...","verdict":true,"reason":"简短原因"}]}。',
+          "每个输入 topicId 必须恰好返回一次。"
+        ].join("\n")
+      },
+      {
+        role: "user",
+        content: JSON.stringify(normalizedTopics)
+      }
+    ];
+  }
+  function isValidDeArrowTitle(value) {
+    if (typeof value !== "string") return false;
+    const title = value.trim();
+    if (!title || /[\r\n]/.test(title)) return false;
+    if (/<\/?[a-z][^>]*>/i.test(title)) return false;
+    return true;
+  }
+  function parseDeArrowRewriteResponse(value) {
+    const content = normalizeString2(getCompletionText(value) || value);
+    if (!content) throw new Error("DeArrow 改写未返回标题");
+    let title = content;
+    const looksLikeJson = content.startsWith("{") || /^```(?:json)?/i.test(content);
+    if (looksLikeJson) {
+      try {
+        const parsed = JSON.parse(extractJsonText(content));
+        title = typeof parsed === "string" ? parsed : parsed?.title;
+      } catch (error) {
+        const parseError = new Error(`DeArrow 改写返回了无效 JSON：${normalizeError(error)}`);
+        parseError.code = "DEARROW_INVALID_REWRITE_JSON";
+        parseError.retryable = false;
+        throw parseError;
+      }
+    }
+    if (!isValidDeArrowTitle(title)) {
+      const error = new Error("DeArrow 改写标题为空、包含 HTML 或包含多行内容");
+      error.code = "DEARROW_INVALID_REWRITE_TITLE";
+      error.retryable = false;
+      throw error;
+    }
+    return title.trim();
+  }
+  function decodeBasicHtmlEntities(value) {
+    return String(value || "").replace(/&(nbsp|amp|lt|gt|quot|#39);/gi, (entity) => ({
+      "&nbsp;": " ",
+      "&amp;": "&",
+      "&lt;": "<",
+      "&gt;": ">",
+      "&quot;": '"',
+      "&#39;": "'"
+    })[entity.toLowerCase()] || entity);
+  }
+  function sanitizeDeArrowFirstPostContent(value) {
+    return decodeBasicHtmlEntities(value).replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, " ").replace(/<\s*img\b[^>]*>/gi, " ").replace(/!\[[^\]]*]\([^\n)]*\)/g, " ").replace(/!\[[^\]]*]\[[^\n\]]*]/g, " ").replace(/<\/?[a-z][^>]*>/gi, " ").replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").trim();
+  }
+  function sanitizeDeArrowCookedContent(value) {
+    const cooked = String(value || "");
+    if (!cooked) return "";
+    const withoutImageChrome = cooked.replace(
+      /<div\b(?=[^>]*\bclass\s*=\s*(?:"[^"]*\blightbox-wrapper\b[^"]*"|'[^']*\blightbox-wrapper\b[^']*'))[^>]*>[\s\S]*?<\/a>\s*<\/div>/gi,
+      " "
+    ).replace(
+      /<a\b(?=[^>]*\bclass\s*=\s*(?:"[^"]*\blightbox\b[^"]*"|'[^']*\blightbox\b[^']*'))[^>]*>[\s\S]*?<\/a>/gi,
+      " "
+    ).replace(
+      /<div\b(?=[^>]*\bclass\s*=\s*(?:"[^"]*\bmeta\b[^"]*"|'[^']*\bmeta\b[^']*'))[^>]*>[\s\S]*?<\/div>/gi,
+      " "
+    );
+    return sanitizeDeArrowFirstPostContent(withoutImageChrome);
+  }
+  function getDeArrowFirstPost(payload) {
+    if (typeof payload === "string") return null;
+    const hasPostNumber = (post) => {
+      const value = normalizeString2(post?.post_number);
+      return Boolean(value) && Number.isFinite(Number(value));
+    };
+    const posts = Array.isArray(payload?.post_stream?.posts) ? payload.post_stream.posts : Array.isArray(payload?.posts) ? payload.posts : null;
+    if (posts) {
+      const explicitFirstPost = posts.find((post) => hasPostNumber(post) && Number(post.post_number) === 1);
+      if (explicitFirstPost) return explicitFirstPost;
+      const containsNumberedPosts = posts.some(hasPostNumber);
+      return containsNumberedPosts ? null : posts[0] || null;
+    }
+    const candidate = payload?.firstPost ?? payload;
+    if (hasPostNumber(candidate) && Number(candidate.post_number) !== 1) {
+      return null;
+    }
+    return candidate;
+  }
+  function extractDeArrowFirstPostContent(payload) {
+    if (typeof payload === "string") return sanitizeDeArrowFirstPostContent(payload);
+    const firstPost = getDeArrowFirstPost(payload);
+    if (!firstPost) return "";
+    if (typeof firstPost.raw === "string") {
+      return sanitizeDeArrowFirstPostContent(firstPost.raw);
+    }
+    for (const candidate of [firstPost.content, firstPost.text]) {
+      const content = sanitizeDeArrowFirstPostContent(candidate || "");
+      if (content) return content;
+    }
+    return sanitizeDeArrowCookedContent(firstPost.cooked);
+  }
+  function extractDeArrowFirstPostContext(payload, options = {}) {
+    const firstPost = getDeArrowFirstPost(payload);
+    const textContent = extractDeArrowFirstPostContent(payload);
+    const extracted = extractImagesFromCooked(firstPost?.cooked || "", {
+      baseUrl: options.baseUrl || DEARROW_IMAGE_BASE_URL
+    });
+    const images = [];
+    const skippedImages = [...extracted.skippedImages];
+    const seenUrls = /* @__PURE__ */ new Set();
+    extracted.images.forEach((image) => {
+      if (!image.url || seenUrls.has(image.url)) {
+        skippedImages.push({
+          ...image,
+          reason: image.url ? "duplicate-image" : "missing-url"
+        });
+        return;
+      }
+      seenUrls.add(image.url);
+      images.push({
+        ...image,
+        id: images.length + 1,
+        floor: firstPost?.post_number || 1,
+        username: normalizeString2(firstPost?.username)
+      });
+    });
+    const imagePlaceholders = images.map(formatDeArrowImagePlaceholder).join("\n");
+    return {
+      textContent,
+      content: [textContent, imagePlaceholders].filter(Boolean).join("\n"),
+      images,
+      skippedImages
+    };
+  }
+  function buildDeArrowRewriteMessages({ originalTitle, content, imageInputs = [] }) {
+    const attachedImages = Array.isArray(imageInputs) ? imageInputs : [];
+    const hasAttachedImages = attachedImages.length > 0;
+    return [
+      {
+        role: "system",
+        content: [
+          "你负责根据论坛主题首帖改写标题。",
+          "新标题必须具体、中立、不夸张，直接表达首帖的实际主题。",
+          "不得补充首帖不存在的事实；保留重要的技术名称、产品名、版本号和数值。",
+          hasAttachedImages ? "用户消息附有仅来自首帖的图片；必须结合图片视觉内容与 [图片#] 占位信息改写标题。" : "",
+          '仅返回严格 JSON：{"title":"单行新标题"}。不要返回 HTML、Markdown 或解释。'
+        ].filter(Boolean).join("\n")
+      },
+      {
+        role: "user",
+        content: buildUserContentWithImages(
+          JSON.stringify({
+            originalTitle: normalizeString2(originalTitle),
+            firstPost: normalizeString2(content),
+            ...hasAttachedImages ? { attachedImageCount: attachedImages.length } : {}
+          }),
+          attachedImages
+        )
+      }
+    ];
+  }
+  function collectTitleTextNodes(root, output = []) {
+    if (!root) return output;
+    const childNodes = root.childNodes ? Array.from(root.childNodes) : [];
+    childNodes.forEach((node) => {
+      if (node?.nodeType === 3) {
+        if (normalizeString2(node.nodeValue)) output.push(node);
+        return;
+      }
+      if (node?.nodeType !== 1) return;
+      if (node.matches?.(SKIPPED_TITLE_CONTAINER_SELECTOR)) return;
+      collectTitleTextNodes(node, output);
+    });
+    return output;
+  }
+  function createDeArrowTitleAccessor(titleElement) {
+    if (!titleElement) return null;
+    const textNodes = collectTitleTextNodes(titleElement);
+    if (textNodes.length > 0) {
+      const firstTextNode = textNodes[0];
+      const match = String(firstTextNode.nodeValue || "").match(/^(\s*)([\s\S]*?)(\s*)$/);
+      const leading = match?.[1] || "";
+      const trailing = textNodes.length === 1 ? match?.[3] || "" : "";
+      return {
+        element: titleElement,
+        getText() {
+          return normalizeString2(textNodes.map((node) => String(node.nodeValue || "")).join(""));
+        },
+        setText(value) {
+          const nextText = normalizeString2(value);
+          if (!nextText || this.getText() === nextText) return;
+          firstTextNode.nodeValue = `${leading}${nextText}${trailing}`;
+          textNodes.slice(1).forEach((node) => {
+            if (node.nodeValue) node.nodeValue = "";
+          });
+        }
+      };
+    }
+    const hasElementChildren = Number(titleElement.children?.length || 0) > 0;
+    if (hasElementChildren) return null;
+    return {
+      element: titleElement,
+      getText() {
+        return normalizeString2(titleElement.textContent);
+      },
+      setText(value) {
+        const nextText = normalizeString2(value);
+        if (nextText && normalizeString2(titleElement.textContent) !== nextText) {
+          titleElement.textContent = nextText;
+        }
+      }
+    };
+  }
+  function defaultFindTitleElement(item) {
+    for (const selector of TITLE_SELECTORS) {
+      const element = item?.querySelector?.(selector);
+      if (element) return element;
+    }
+    return null;
+  }
+  function defaultGetButtonMountTarget(item) {
+    if (!item) return null;
+    const summaryButton = item.querySelector?.(".topic-summary-button");
+    if (summaryButton?.parentNode) return summaryButton.parentNode;
+    if (item.classList?.contains("bookmark-list-item")) {
+      return item.querySelector?.(".link-bottom-line") || item.querySelector?.(".main-link") || item;
+    }
+    return item.querySelector?.(".main-link") || item.querySelector?.("td:nth-child(2)") || item;
+  }
+  function getBookmarkFlowTarget(item) {
+    return item?.querySelector?.(".link-bottom-line") || item?.querySelector?.(".main-link") || item;
+  }
+  function setAttribute(element, name, value) {
+    if (typeof element?.setAttribute === "function") {
+      element.setAttribute(name, String(value));
+    } else if (element) {
+      element[name] = String(value);
+    }
+  }
+  function removeAttribute(element, name) {
+    if (typeof element?.removeAttribute === "function") element.removeAttribute(name);
+    else if (element && name in element) delete element[name];
+  }
+  function makeDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+  }
+  function createDeArrowFeature(deps = {}) {
+    const state2 = deps.state && typeof deps.state === "object" ? deps.state : {};
+    const documentRef = deps.document ?? globalThis.document;
+    const queueMicrotaskImpl = deps.queueMicrotask ?? globalThis.queueMicrotask ?? ((callback) => Promise.resolve().then(callback));
+    const setTimeoutImpl = deps.setTimeout ?? globalThis.setTimeout;
+    const clearTimeoutImpl = deps.clearTimeout ?? globalThis.clearTimeout;
+    const now = typeof deps.now === "function" ? deps.now : () => /* @__PURE__ */ new Date();
+    let internalTopicStates = normalizeDeArrowTopicStates(
+      deps.initialTopicStates ?? state2.dearrowTopicStates
+    );
+    let refreshTimer = null;
+    let destroyed = false;
+    let drainPromise = null;
+    let drainScheduled = false;
+    const judgmentQueue = /* @__PURE__ */ new Map();
+    const judgmentInFlight = /* @__PURE__ */ new Map();
+    const judgmentOwnerByTopic = /* @__PURE__ */ new Map();
+    const rewriteInFlight = /* @__PURE__ */ new Map();
+    const rewriteOwnerByTopic = /* @__PURE__ */ new Map();
+    const runtimeErrors = /* @__PURE__ */ new Map();
+    let visibleDescriptors = [];
+    const originalTitlePreviews = /* @__PURE__ */ new Map();
+    const buttonInteractionStates = /* @__PURE__ */ new WeakMap();
+    function getRawConfig() {
+      const value = typeof deps.getConfig === "function" ? deps.getConfig() : state2;
+      return value && typeof value === "object" ? value : {};
+    }
+    function getConfig() {
+      const raw = getRawConfig();
+      const apiConfigurations2 = typeof deps.getApiConfigurations === "function" ? deps.getApiConfigurations() : raw.apiConfigurations;
+      return {
+        ...raw,
+        ...normalizeDeArrowSettings(raw, apiConfigurations2),
+        apiConfigurations: Array.isArray(apiConfigurations2) ? apiConfigurations2 : []
+      };
+    }
+    function getCurrentUrl() {
+      if (typeof deps.getCurrentUrl === "function") return String(deps.getCurrentUrl() || "");
+      if (typeof state2.currentPageUrl === "string") return state2.currentPageUrl;
+      return String(globalThis.location?.href || "");
+    }
+    function isActive(url = getCurrentUrl()) {
+      const config = getConfig();
+      return config.dearrowEnabled && isDeArrowScopeUrl(url, config.dearrowScopeRules);
+    }
+    function getTopicStates() {
+      const topicStatesGetter = deps.getTopicStates ?? deps.getDeArrowTopicStates;
+      const raw = typeof topicStatesGetter === "function" ? topicStatesGetter() : state2.dearrowTopicStates ?? internalTopicStates;
+      internalTopicStates = normalizeDeArrowTopicStates(raw);
+      return internalTopicStates;
+    }
+    function notifyAsyncFailure(result, label) {
+      if (!result || typeof result.then !== "function") return;
+      result.catch((error) => {
+        deps.logger?.warn?.(`[DeArrow] ${label}:`, error);
+      });
+    }
+    function setTopicStates(nextStates, meta = {}) {
+      internalTopicStates = normalizeDeArrowTopicStates(nextStates);
+      const topicStatesSetter = deps.setTopicStates ?? deps.setDeArrowTopicStates;
+      if (typeof topicStatesSetter === "function") {
+        notifyAsyncFailure(topicStatesSetter(internalTopicStates, meta), "保存状态失败");
+      } else {
+        state2.dearrowTopicStates = internalTopicStates;
+      }
+      const persistenceWriter = deps.persistTopicStates ?? deps.persistDeArrowTopicStates;
+      if (typeof persistenceWriter === "function") {
+        notifyAsyncFailure(persistenceWriter(internalTopicStates, meta), "持久化状态失败");
+      }
+      if (typeof deps.scheduleDriveSync === "function") {
+        notifyAsyncFailure(deps.scheduleDriveSync(meta), "Drive 同步排队失败");
+      } else if (typeof deps.markDriveDeArrowDirty === "function") {
+        notifyAsyncFailure(deps.markDriveDeArrowDirty({ schedule: true, meta }), "Drive 同步排队失败");
+      }
+      return internalTopicStates;
+    }
+    function commitTopicStateUpdates(updates, meta = {}) {
+      if (!Array.isArray(updates) || updates.length === 0) return getTopicStates();
+      const next = { ...getTopicStates() };
+      updates.forEach(({ topicId, value }) => {
+        const id = normalizeTopicId2(topicId);
+        if (!id) return;
+        const normalized = normalizeDeArrowTopicState(value);
+        if (normalized) next[id] = normalized;
+        else delete next[id];
+      });
+      return setTopicStates(next, meta);
+    }
+    function resolveApiForPurpose(purpose) {
+      const config = getConfig();
+      const dedicatedResolver = purpose === "judgment" ? deps.getDeArrowJudgmentApi : deps.getDeArrowRewriteApi;
+      if (typeof dedicatedResolver === "function") {
+        const selected = dedicatedResolver(config);
+        if (selected) return selected;
+      }
+      if (typeof deps.getDeArrowApi === "function") {
+        const selected = deps.getDeArrowApi(config, purpose);
+        if (selected) return selected;
+      }
+      const index = purpose === "judgment" ? config.dearrowJudgmentApiIndex : config.dearrowRewriteApiIndex;
+      return config.apiConfigurations[index] ?? config.apiConfigurations[0] ?? null;
+    }
+    function getModelName(api) {
+      return normalizeString2(api?.model) || "未知模型";
+    }
+    function makeKey(topicId, originalTitle) {
+      return `${normalizeTopicId2(topicId)}\0${normalizeString2(originalTitle)}`;
+    }
+    function getSemanticBundleFingerprint(topicId, originalTitle, kind) {
+      const id = normalizeTopicId2(topicId);
+      const title = normalizeString2(originalTitle);
+      const stored = getTopicStates()[id];
+      const matches = stored?.originalTitle === title;
+      const bundle = {
+        originalTitle: matches ? stored.originalTitle : stored?.originalTitle || title
+      };
+      if (matches && kind === "judgment") {
+        ["verdict", "verdictReason", "verdictModel", "verdictUpdatedAt"].forEach((field) => {
+          if (Object.hasOwn(stored, field)) bundle[field] = stored[field];
+        });
+      } else if (matches && kind === "rewrite") {
+        ["rewrittenTitle", "rewriteModel", "rewrittenAt"].forEach((field) => {
+          if (Object.hasOwn(stored, field)) bundle[field] = stored[field];
+        });
+      }
+      return stableSerialize(bundle);
+    }
+    function recordRuntimeError({
+      key,
+      topicId,
+      originalTitle,
+      error,
+      kind,
+      baselineFingerprint
+    }) {
+      const normalizedKind = kind === "judgment" ? "judgment" : "rewrite";
+      const baseline = normalizeString2(baselineFingerprint) || getSemanticBundleFingerprint(topicId, originalTitle, normalizedKind);
+      if (getSemanticBundleFingerprint(topicId, originalTitle, normalizedKind) !== baseline) {
+        runtimeErrors.delete(key);
+        return null;
+      }
+      const value = {
+        kind: normalizedKind,
+        message: normalizeError(error, "DeArrow 操作失败"),
+        baselineFingerprint: baseline,
+        failedAt: now().toISOString()
+      };
+      runtimeErrors.set(key, value);
+      return value;
+    }
+    function getCurrentRuntimeError(key, topicId, originalTitle) {
+      const value = runtimeErrors.get(key);
+      if (!value) return null;
+      const normalized = typeof value === "string" ? {
+        kind: "rewrite",
+        message: value,
+        baselineFingerprint: getSemanticBundleFingerprint(topicId, originalTitle, "rewrite")
+      } : value;
+      if (getSemanticBundleFingerprint(topicId, originalTitle, normalized.kind) !== normalized.baselineFingerprint) {
+        runtimeErrors.delete(key);
+        return null;
+      }
+      return normalized;
+    }
+    function pruneRuntimeErrorsForTopic(topicId, currentKey) {
+      const prefix = `${normalizeTopicId2(topicId)}\0`;
+      runtimeErrors.forEach((_value, key) => {
+        if (key.startsWith(prefix) && key !== currentKey) runtimeErrors.delete(key);
+      });
+    }
+    function getStoredSemanticState(topicId, originalTitle) {
+      const stored = getTopicStates()[normalizeTopicId2(topicId)];
+      if (!stored || stored.originalTitle !== normalizeString2(originalTitle)) {
+        return { name: "unjudged", stored: null };
+      }
+      if (stored.rewrittenTitle) return { name: "rewritten", stored };
+      if (stored.verdict === true) return { name: "clickbait", stored };
+      if (stored.verdict === false) return { name: "neutral", stored };
+      return { name: "unjudged", stored };
+    }
+    function getOperationView(topicId, key) {
+      const rewriteOperation = rewriteOwnerByTopic.get(normalizeTopicId2(topicId));
+      if (rewriteOperation?.key === key && isRewriteOperationCurrent(rewriteOperation)) {
+        if (rewriteOperation.phase === "awaiting-judgment") {
+          return { state: "judging", message: rewriteOperation.message || "" };
+        }
+        if (rewriteOperation.phase === "fetching-content" || rewriteOperation.phase === "retry-wait") {
+          return { state: "preparing", message: rewriteOperation.message || "" };
+        }
+        if (rewriteOperation.phase === "requesting-model") {
+          return { state: "rewriting", message: rewriteOperation.message || "" };
+        }
+      }
+      const judgmentOperation = judgmentOwnerByTopic.get(normalizeTopicId2(topicId));
+      if (judgmentOperation?.key === key && isJudgmentEntryCurrent(judgmentOperation)) {
+        return { state: "judging", message: "" };
+      }
+      return { state: "idle", message: "" };
+    }
+    function selectButtonView(descriptor) {
+      const semantic = getStoredSemanticState(descriptor.topicId, descriptor.originalTitle);
+      const error = getCurrentRuntimeError(
+        descriptor.key,
+        descriptor.topicId,
+        descriptor.originalTitle
+      );
+      const operation = error ? { state: "idle", message: "" } : getOperationView(descriptor.topicId, descriptor.key);
+      return { semantic, operation, error };
+    }
+    function ensureButtonIcon(button) {
+      if (!button || button.querySelector?.(".topic-dearrow-icon")) return;
+      button.innerHTML = DEARROW_ICON_SVG;
+    }
+    function renderButtonView(button, view, details = {}) {
+      if (!button) return;
+      ensureButtonIcon(button);
+      const semanticState = view?.semantic?.name || "unjudged";
+      const operationState = view?.operation?.state || "idle";
+      const error = view?.error || null;
+      const previewable = semanticState === "rewritten" && operationState === "idle";
+      if (!previewable) {
+        endOriginalTitlePreview(button, "", { force: true, restore: true });
+      }
+      button.classList?.remove?.(...BUTTON_STATE_CLASSES);
+      button.classList?.add?.(`is-${semanticState}`);
+      if (operationState === "judging") button.classList?.add?.("is-checking");
+      if (operationState === "preparing") button.classList?.add?.("is-preparing");
+      if (operationState === "rewriting") button.classList?.add?.("is-rewriting");
+      if (error) button.classList?.add?.("has-error");
+      button.dataset.semanticState = semanticState;
+      button.dataset.operationState = operationState;
+      if (error?.kind) button.dataset.errorKind = error.kind;
+      else delete button.dataset.errorKind;
+      button.dataset.state = error ? "error" : operationState === "judging" ? "checking" : operationState === "preparing" ? "preparing" : operationState === "rewriting" ? "rewriting" : semanticState;
+      button.disabled = operationState === "preparing" || operationState === "rewriting";
+      removeAttribute(button, "aria-busy");
+      const originalTitle = normalizeString2(details.originalTitle || button.dataset.originalTitle);
+      const reason = normalizeString2(view?.semantic?.stored?.verdictReason || details.reason);
+      const operationMessage = normalizeString2(view?.operation?.message || details.message);
+      if (originalTitle) button.dataset.originalTitle = originalTitle;
+      let ariaLabel = "";
+      if (error) {
+        button.title = error.message ? `DeArrow 失败：${error.message}` : "DeArrow 失败，点击重试";
+        ariaLabel = semanticState === "rewritten" ? `${button.title}。当前保留上次改写；悬停可临时查看原标题：${originalTitle}` : button.title;
+      } else if (operationState === "judging") {
+        button.title = operationMessage || "正在判断是否为标题党；点击后会在判断完成后改写";
+        setAttribute(button, "aria-busy", "true");
+        ariaLabel = button.title;
+      } else if (operationState === "preparing") {
+        button.title = operationMessage || "正在提取首帖内容";
+        setAttribute(button, "aria-busy", "true");
+        ariaLabel = button.title;
+      } else if (operationState === "rewriting") {
+        button.title = operationMessage || "正在根据首帖改写标题";
+        setAttribute(button, "aria-busy", "true");
+        ariaLabel = button.title;
+      } else if (semanticState === "clickbait") {
+        button.title = reason ? `疑似标题党：${reason}` : "疑似标题党，点击改写";
+        ariaLabel = button.title;
+      } else if (semanticState === "neutral") {
+        button.title = reason || "未检测到标题党特征，仍可点击改写";
+        ariaLabel = button.title;
+      } else if (semanticState === "rewritten") {
+        button.title = "";
+        ariaLabel = originalTitlePreviews.has(button) ? `DeArrow 已改写，当前临时显示原标题：${originalTitle}` : `DeArrow 已改写。悬停可临时查看原标题：${originalTitle}`;
+      } else {
+        button.title = "尚未判断是否为标题党；点击后将先判断再改写";
+        ariaLabel = button.title;
+      }
+      const activePreview = originalTitlePreviews.get(button);
+      if (activePreview && previewable) {
+        activePreview.restingTitle = button.title;
+        activePreview.restingAriaLabel = ariaLabel;
+        button.title = "";
+        ariaLabel = `DeArrow 已改写，当前临时显示原标题：${originalTitle}`;
+      }
+      setAttribute(button, "aria-label", ariaLabel);
+    }
+    function renderStoredState(descriptor) {
+      const stored = getTopicStates()[descriptor.topicId];
+      const matchingStored = stored?.originalTitle === descriptor.originalTitle ? stored : null;
+      if (matchingStored?.rewrittenTitle) {
+        const knownRewrite = normalizeString2(descriptor.button.dataset?.rewrittenTitle) === matchingStored.rewrittenTitle;
+        const preview = originalTitlePreviews.get(descriptor.button);
+        if (preview && knownRewrite) {
+          preview.accessor = descriptor.accessor;
+          preview.originalTitle = matchingStored.originalTitle;
+          preview.rewrittenTitle = matchingStored.rewrittenTitle;
+        } else {
+          if (preview) {
+            endOriginalTitlePreview(descriptor.button, "", {
+              force: true,
+              restore: false
+            });
+          }
+          descriptor.accessor.setText(matchingStored.rewrittenTitle);
+          if (!knownRewrite) suppressPreviewForCurrentInteraction(descriptor.button);
+        }
+        descriptor.button.dataset.rewrittenTitle = matchingStored.rewrittenTitle;
+      } else {
+        const previousRewrite = normalizeString2(descriptor.button.dataset?.rewrittenTitle);
+        if (previousRewrite) {
+          endOriginalTitlePreview(descriptor.button, "", { force: true, restore: false });
+          if (normalizeString2(descriptor.accessor.getText?.()) === previousRewrite) {
+            descriptor.accessor.setText(descriptor.originalTitle);
+          }
+          delete descriptor.button.dataset.rewrittenTitle;
+        }
+      }
+      const view = selectButtonView(descriptor);
+      renderButtonView(descriptor.button, view, {
+        originalTitle: descriptor.originalTitle
+      });
+      return Boolean(
+        matchingStored?.rewrittenTitle || typeof matchingStored?.verdict === "boolean" || view.error || view.operation.state !== "idle"
+      );
+    }
+    function renderKey(key) {
+      visibleDescriptors.forEach((descriptor) => {
+        if (descriptor.key === key) renderStoredState(descriptor);
+      });
+    }
+    function invalidateChangedTitle(topicId, stored, nextOriginalTitle) {
+      const id = normalizeTopicId2(topicId);
+      const title = normalizeString2(nextOriginalTitle);
+      if (!id || !stored || !title) return;
+      const updatedAt = now().toISOString();
+      commitTopicStateUpdates([{
+        topicId: id,
+        value: { originalTitle: title, updatedAt }
+      }], {
+        topicId: id,
+        topicIds: [id],
+        kind: "invalidate"
+      });
+    }
+    function resolveDescriptorOriginalTitle(topicId, accessor, button) {
+      const displayedTitle = normalizeString2(accessor?.getText?.());
+      if (!displayedTitle) return "";
+      const buttonOriginal = normalizeString2(button?.dataset?.originalTitle);
+      const buttonRewrite = normalizeString2(button?.dataset?.rewrittenTitle);
+      const stored = getTopicStates()[topicId];
+      const displayedIsOldPresentation = Boolean(
+        buttonOriginal && (displayedTitle === buttonOriginal || displayedTitle === buttonRewrite)
+      );
+      const displayedIsStoredPresentation = Boolean(
+        stored && (displayedTitle === normalizeString2(stored.originalTitle) || displayedTitle === normalizeString2(stored.rewrittenTitle))
+      );
+      if (stored && (displayedIsOldPresentation || displayedIsStoredPresentation)) {
+        const activePreview = originalTitlePreviews.get(button);
+        const canPreservePreview = Boolean(
+          activePreview && displayedTitle === activePreview.originalTitle && normalizeString2(stored.originalTitle) === activePreview.originalTitle && normalizeString2(stored.rewrittenTitle) === activePreview.rewrittenTitle
+        );
+        if (canPreservePreview) {
+          activePreview.accessor = accessor;
+          const nextKey2 = makeKey(topicId, activePreview.originalTitle);
+          pruneRuntimeErrorsForTopic(topicId, nextKey2);
+          return activePreview.originalTitle;
+        }
+        endOriginalTitlePreview(button, "", { force: true, restore: false });
+        const nextOriginalTitle = normalizeString2(stored.originalTitle);
+        const nextRewrittenTitle = normalizeString2(stored.rewrittenTitle);
+        const nextDisplayedTitle = nextRewrittenTitle || nextOriginalTitle;
+        if (nextDisplayedTitle && displayedTitle !== nextDisplayedTitle) {
+          accessor.setText?.(nextDisplayedTitle);
+          suppressPreviewForCurrentInteraction(button);
+        }
+        button.dataset.originalTitle = nextOriginalTitle;
+        if (nextRewrittenTitle) button.dataset.rewrittenTitle = nextRewrittenTitle;
+        else delete button.dataset.rewrittenTitle;
+        const nextKey = makeKey(topicId, nextOriginalTitle);
+        pruneRuntimeErrorsForTopic(topicId, nextKey);
+        return nextOriginalTitle;
+      }
+      if (!stored && displayedIsOldPresentation) {
+        endOriginalTitlePreview(button, "", { force: true, restore: false });
+        if (buttonOriginal && displayedTitle !== buttonOriginal) {
+          accessor.setText?.(buttonOriginal);
+          suppressPreviewForCurrentInteraction(button);
+        }
+        delete button.dataset.rewrittenTitle;
+        const nextKey = makeKey(topicId, buttonOriginal);
+        pruneRuntimeErrorsForTopic(topicId, nextKey);
+        return buttonOriginal;
+      }
+      if (stored) {
+        invalidateChangedTitle(topicId, stored, displayedTitle);
+      }
+      pruneRuntimeErrorsForTopic(topicId, makeKey(topicId, displayedTitle));
+      return displayedTitle;
+    }
+    function findTitleElement(item) {
+      if (typeof deps.findTitleElement === "function") return deps.findTitleElement(item);
+      return defaultFindTitleElement(item);
+    }
+    function getTitleAccessor(item) {
+      if (typeof deps.getTitleAccessor === "function") return deps.getTitleAccessor(item);
+      return createDeArrowTitleAccessor(findTitleElement(item));
+    }
+    function beginOriginalTitlePreview(button, item, reason) {
+      if (!button || button.dataset?.semanticState !== "rewritten" || button.dataset?.operationState !== "idle") return;
+      const originalTitle = normalizeString2(button.dataset?.originalTitle);
+      const topicId = normalizeTopicId2(button.dataset?.topicId);
+      const stored = getTopicStates()[topicId];
+      const rewrittenTitle = stored?.originalTitle === originalTitle ? normalizeString2(stored.rewrittenTitle) : "";
+      if (!originalTitle || !rewrittenTitle) return;
+      let preview = originalTitlePreviews.get(button);
+      if (!preview) {
+        const accessor = getTitleAccessor(item);
+        if (!accessor) return;
+        preview = {
+          accessor,
+          originalTitle,
+          rewrittenTitle,
+          hover: false,
+          focus: false,
+          restingTitle: button.title || "",
+          restingAriaLabel: button.getAttribute?.("aria-label") || ""
+        };
+        originalTitlePreviews.set(button, preview);
+        if (normalizeString2(accessor.getText?.()) === rewrittenTitle) {
+          accessor.setText?.(originalTitle);
+        }
+        button.classList?.add?.("is-previewing-original");
+      }
+      if (reason === "focus") preview.focus = true;
+      else preview.hover = true;
+      button.title = "";
+      setAttribute(button, "aria-label", `DeArrow 已改写，当前临时显示原标题：${originalTitle}`);
+    }
+    function endOriginalTitlePreview(button, reason, options = {}) {
+      const preview = originalTitlePreviews.get(button);
+      if (!preview) return;
+      if (reason === "focus") preview.focus = false;
+      else if (reason === "hover") preview.hover = false;
+      if (!options.force && (preview.hover || preview.focus)) return;
+      originalTitlePreviews.delete(button);
+      button.classList?.remove?.("is-previewing-original");
+      if (options.restore !== false) {
+        const topicId = normalizeTopicId2(button.dataset?.topicId);
+        const stored = getTopicStates()[topicId];
+        const rewrittenTitle = stored?.originalTitle === preview.originalTitle ? normalizeString2(stored.rewrittenTitle) : normalizeString2(button.dataset?.rewrittenTitle || preview.rewrittenTitle);
+        if (rewrittenTitle && normalizeString2(preview.accessor.getText?.()) === preview.originalTitle) {
+          preview.accessor.setText?.(rewrittenTitle);
+          button.dataset.rewrittenTitle = rewrittenTitle;
+        }
+      }
+      if (button.dataset?.semanticState === "rewritten") {
+        button.title = preview.restingTitle || "";
+        setAttribute(
+          button,
+          "aria-label",
+          preview.restingAriaLabel || `DeArrow 已改写。悬停可临时查看原标题：${preview.originalTitle}`
+        );
+      }
+    }
+    function suppressPreviewForCurrentInteraction(button) {
+      const interaction = buttonInteractionStates.get(button);
+      if (!interaction) return;
+      if (interaction.hover) interaction.suppressHoverPreview = true;
+      if (interaction.focus) interaction.suppressFocusPreview = true;
+    }
+    function setButtonInteraction(button, item, reason, active) {
+      const interaction = buttonInteractionStates.get(button) || {
+        hover: false,
+        focus: false,
+        suppressHoverPreview: false,
+        suppressFocusPreview: false
+      };
+      if (reason === "focus") {
+        interaction.focus = active;
+        if (!active) interaction.suppressFocusPreview = false;
+      } else {
+        interaction.hover = active;
+        if (!active) interaction.suppressHoverPreview = false;
+      }
+      buttonInteractionStates.set(button, interaction);
+      if (!active) {
+        endOriginalTitlePreview(button, reason);
+        return;
+      }
+      const isSuppressed = reason === "focus" ? interaction.suppressFocusPreview : interaction.suppressHoverPreview;
+      if (!isSuppressed) beginOriginalTitlePreview(button, item, reason);
+    }
+    function getTopicId(item) {
+      if (typeof deps.extractTopicIdFromElement === "function") {
+        return normalizeTopicId2(deps.extractTopicIdFromElement(item));
+      }
+      const explicit = normalizeTopicId2(item?.dataset?.topicId);
+      if (explicit) return explicit;
+      const href = findTitleElement(item)?.getAttribute?.("href") || "";
+      return normalizeTopicId2(href.match(/\/t\/(?:[^/]+\/)?(\d+)/)?.[1]);
+    }
+    function mountButton(item, button) {
+      if (item?.classList?.contains?.("bookmark-list-item")) {
+        const flowTarget = getBookmarkFlowTarget(item);
+        if (!flowTarget) return false;
+        let stack = item.querySelector?.(".topic-dearrow-control-stack");
+        if (!stack) {
+          stack = documentRef?.createElement?.("div");
+          if (!stack) return false;
+          stack.className = "topic-dearrow-control-stack";
+          flowTarget.appendChild?.(stack);
+        } else if (stack.parentNode !== flowTarget) {
+          flowTarget.appendChild?.(stack);
+        }
+        const summaryButton2 = item.querySelector?.(".topic-summary-button");
+        if (button.parentNode !== stack) {
+          if (summaryButton2?.parentNode === stack && typeof stack.insertBefore === "function") {
+            stack.insertBefore(button, summaryButton2);
+          } else {
+            stack.appendChild?.(button);
+          }
+        }
+        if (summaryButton2 && summaryButton2.parentNode !== stack) {
+          stack.appendChild?.(summaryButton2);
+        }
+        return true;
+      }
+      const target = typeof deps.getButtonMountTarget === "function" ? deps.getButtonMountTarget(item) : defaultGetButtonMountTarget(item);
+      if (!target) return false;
+      const summaryButton = item.querySelector?.(".topic-summary-button");
+      if (summaryButton?.parentNode === target && button.nextSibling !== summaryButton && typeof target.insertBefore === "function") {
+        target.insertBefore(button, summaryButton);
+      } else if (button.parentNode !== target) {
+        target.appendChild?.(button);
+      }
+      return true;
+    }
+    function createButton(item, topicId) {
+      const button = documentRef?.createElement?.("button");
+      if (!button) return null;
+      button.type = "button";
+      button.className = DEARROW_BUTTON_CLASS;
+      button.dataset.topicId = topicId;
+      ensureButtonIcon(button);
+      button.addEventListener?.("click", (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        endOriginalTitlePreview(button, "", { force: true, restore: true });
+        const activeTopicId = normalizeTopicId2(button.dataset.topicId);
+        const originalTitle = normalizeString2(button.dataset.originalTitle);
+        rewriteTopic(activeTopicId, { originalTitle }).catch(() => {
+        });
+      });
+      button.addEventListener?.("mouseenter", () => setButtonInteraction(button, item, "hover", true));
+      button.addEventListener?.("mouseleave", () => setButtonInteraction(button, item, "hover", false));
+      button.addEventListener?.("focus", () => setButtonInteraction(button, item, "focus", true));
+      button.addEventListener?.("blur", () => setButtonInteraction(button, item, "focus", false));
+      if (!mountButton(item, button)) return null;
+      return button;
+    }
+    function isSoftHidden(item) {
+      if (typeof deps.isSoftHidden === "function") return deps.isSoftHidden(item) === true;
+      const getStyle = deps.getComputedStyle ?? globalThis.getComputedStyle;
+      if (!item || typeof getStyle !== "function") return false;
+      const style = getStyle(item);
+      if (style?.display === "none") return true;
+      if (style?.visibility === "collapse" || style?.visibility === "hidden") return true;
+      if (style?.position === "absolute") {
+        const left = Number.parseInt(style.left, 10);
+        if (Number.isFinite(left) && left < -900) return true;
+      }
+      return false;
+    }
+    function restoreItemFromStoredState(item, button = null) {
+      const accessor = getTitleAccessor(item);
+      if (!accessor) return;
+      const topicId = normalizeTopicId2(button?.dataset?.topicId) || getTopicId(item);
+      const stored = getTopicStates()[topicId];
+      const originalTitle = normalizeString2(
+        button?.dataset?.originalTitle || stored?.originalTitle
+      );
+      const rewrittenTitle = normalizeString2(
+        button?.dataset?.rewrittenTitle || stored?.rewrittenTitle
+      );
+      if (originalTitle && rewrittenTitle && normalizeString2(accessor.getText()) === rewrittenTitle) {
+        accessor.setText(originalTitle);
+      }
+    }
+    function cleanupItem(item) {
+      if (!item) return;
+      visibleDescriptors.filter((descriptor) => descriptor.item === item).forEach(restoreDescriptorTitle);
+      const buttons = Array.from(item.querySelectorAll?.(`.${DEARROW_BUTTON_CLASS}`) || []);
+      if (buttons.length === 0) restoreItemFromStoredState(item);
+      buttons.forEach((button) => {
+        endOriginalTitlePreview(button, "", { force: true, restore: false });
+        restoreItemFromStoredState(item, button);
+        button.remove?.();
+      });
+      const stack = item.querySelector?.(".topic-dearrow-control-stack");
+      if (stack?.parentNode) {
+        const summaryButton = stack.querySelector?.(".topic-summary-button");
+        if (summaryButton) {
+          stack.parentNode.insertBefore?.(summaryButton, stack);
+        }
+        stack.remove?.();
+      }
+      item.classList?.remove?.("has-dearrow-button");
+    }
+    function collectVisibleDescriptors() {
+      const descriptors = [];
+      const topicItems = Array.from(documentRef?.querySelectorAll?.(".topic-list-item") || []);
+      topicItems.forEach((item) => {
+        if (isSoftHidden(item)) {
+          cleanupItem(item);
+          return;
+        }
+        const topicId = getTopicId(item);
+        if (!topicId) {
+          cleanupItem(item);
+          return;
+        }
+        const accessor = getTitleAccessor(item);
+        if (!accessor) {
+          cleanupItem(item);
+          return;
+        }
+        const existingButtons = Array.from(item.querySelectorAll?.(`.${DEARROW_BUTTON_CLASS}`) || []);
+        let button = existingButtons.find((candidate) => normalizeTopicId2(candidate.dataset?.topicId) === topicId) || null;
+        existingButtons.forEach((candidate) => {
+          if (candidate === button) return;
+          endOriginalTitlePreview(candidate, "", { force: true, restore: false });
+          candidate.remove?.();
+        });
+        if (!button) button = createButton(item, topicId);
+        if (!button) return;
+        mountButton(item, button);
+        const originalTitle = resolveDescriptorOriginalTitle(topicId, accessor, button);
+        if (!originalTitle) {
+          cleanupItem(item);
+          return;
+        }
+        button.dataset.topicId = topicId;
+        button.dataset.originalTitle = originalTitle;
+        item.classList?.add?.("has-dearrow-button");
+        if (item.querySelector?.(".topic-summary-button")) {
+          item.classList?.add?.("has-summary-button");
+        } else {
+          item.classList?.remove?.("has-summary-button");
+        }
+        descriptors.push({
+          item,
+          button,
+          accessor,
+          topicId,
+          originalTitle,
+          key: makeKey(topicId, originalTitle)
+        });
+      });
+      const currentButtons = new Set(descriptors.map((descriptor) => descriptor.button));
+      originalTitlePreviews.forEach((_preview, button) => {
+        if (!currentButtons.has(button)) {
+          endOriginalTitlePreview(button, "", { force: true, restore: false });
+        }
+      });
+      return descriptors;
+    }
+    function restoreDescriptorTitle(descriptor) {
+      const originalTitle = normalizeString2(
+        descriptor?.button?.dataset?.originalTitle || descriptor?.originalTitle
+      );
+      const rewrittenTitle = normalizeString2(descriptor?.button?.dataset?.rewrittenTitle);
+      const displayedTitle = normalizeString2(descriptor?.accessor?.getText?.());
+      if (originalTitle && rewrittenTitle && displayedTitle === rewrittenTitle) {
+        descriptor.accessor?.setText?.(originalTitle);
+      }
+    }
+    function cleanup() {
+      originalTitlePreviews.forEach((_preview, button) => {
+        endOriginalTitlePreview(button, "", { force: true, restore: false });
+      });
+      visibleDescriptors.forEach(restoreDescriptorTitle);
+      const knownDescriptors = new Map(visibleDescriptors.map((descriptor) => [descriptor.button, descriptor]));
+      const buttons = Array.from(documentRef?.querySelectorAll?.(`.${DEARROW_BUTTON_CLASS}`) || []);
+      buttons.forEach((button) => {
+        let descriptor = knownDescriptors.get(button);
+        if (!descriptor) {
+          const item2 = button.closest?.(".topic-list-item");
+          const accessor = getTitleAccessor(item2);
+          descriptor = { button, accessor, originalTitle: button.dataset?.originalTitle };
+        }
+        restoreDescriptorTitle(descriptor);
+        const item = button.closest?.(".topic-list-item");
+        button.remove?.();
+        item?.classList?.remove?.("has-dearrow-button");
+      });
+      Array.from(documentRef?.querySelectorAll?.(".topic-list-item.has-dearrow-button") || []).forEach((item) => cleanupItem(item));
+      visibleDescriptors = [];
+    }
+    async function callCompletion(messages, purpose, currentApi) {
+      const requestCompletion = deps.requestCompletion ?? deps.requestChatCompletion;
+      if (typeof requestCompletion !== "function") {
+        throw new Error("DeArrow 缺少模型请求实现");
+      }
+      return requestCompletion({ currentApi, messages, purpose });
+    }
+    async function prepareFirstPostImages(firstPostContext, currentApi) {
+      const images = Array.isArray(firstPostContext?.images) ? firstPostContext.images : [];
+      if (currentApi?.imageInputEnabled !== true || images.length === 0) {
+        return {
+          imageInputs: [],
+          preparedImages: [],
+          skippedImages: []
+        };
+      }
+      const prepareImages = typeof deps.prepareImageInputsForApi === "function" ? deps.prepareImageInputsForApi : prepareImageInputsForApi;
+      try {
+        return await prepareImages(images, {
+          apiConfig: currentApi,
+          requestImpl: deps.imageRequest,
+          fetchImpl: deps.imageFetch,
+          baseUrl: DEARROW_IMAGE_BASE_URL
+        });
+      } catch (error) {
+        deps.logger?.warn?.("[DeArrow] first-post image preparation failed:", error);
+        return {
+          imageInputs: [],
+          preparedImages: [],
+          skippedImages: images.map((image) => ({
+            ...image,
+            reason: "image-preparation-failed",
+            error: normalizeError(error)
+          }))
+        };
+      }
+    }
+    function createStaleOperationError(message = "DeArrow 操作已过期") {
+      const error = new Error(message);
+      error.code = "DEARROW_STALE_OPERATION";
+      error.retryable = false;
+      return error;
+    }
+    function isStaleOperationError(error) {
+      return error?.code === "DEARROW_STALE_OPERATION";
+    }
+    function finalizeJudgmentEntry(entry, action, value) {
+      if (!entry || entry.settled) return false;
+      entry.settled = true;
+      if (judgmentInFlight.get(entry.key) === entry.deferred.promise) {
+        judgmentInFlight.delete(entry.key);
+      }
+      if (judgmentOwnerByTopic.get(entry.topic.topicId) === entry) {
+        judgmentOwnerByTopic.delete(entry.topic.topicId);
+      }
+      if (action === "resolve") entry.deferred.resolve(value);
+      else entry.deferred.reject(value);
+      return true;
+    }
+    function isJudgmentEntryCurrent(entry) {
+      if (destroyed || !entry || entry.settled || judgmentOwnerByTopic.get(entry.topic.topicId) !== entry || !isOperationOriginalStillCurrent(entry.topic.topicId, entry.topic.originalTitle)) {
+        return false;
+      }
+      return getSemanticBundleFingerprint(
+        entry.topic.topicId,
+        entry.topic.originalTitle,
+        "judgment"
+      ) === entry.baselineFingerprint;
+    }
+    function rejectStaleJudgmentEntry(entry) {
+      const staleError = createStaleOperationError("标题已变更，已忽略过期判断结果");
+      finalizeJudgmentEntry(entry, "reject", staleError);
+      renderKey(entry.key);
+      if (!destroyed && isActive()) scheduleRefresh(0, { judge: false });
+    }
+    async function processJudgmentBatch(entries) {
+      const topics = entries.map((entry) => entry.topic);
+      const currentApi = resolveApiForPurpose("judgment");
+      if (!currentApi) throw new Error("DeArrow 没有可用的标题判断 API 配置");
+      const response = await callCompletion(
+        buildDeArrowJudgmentMessages(topics),
+        "dearrow-judgment",
+        currentApi
+      );
+      const parsed = parseDeArrowJudgmentResponse(response);
+      const byTopicId = new Map(parsed.map((item) => [item.topicId, item]));
+      const timestamp = now().toISOString();
+      const updates = [];
+      const successes = [];
+      const missing = [];
+      entries.forEach((entry) => {
+        if (!isJudgmentEntryCurrent(entry)) {
+          rejectStaleJudgmentEntry(entry);
+          return;
+        }
+        const result = byTopicId.get(entry.topic.topicId);
+        if (!result) {
+          missing.push(entry);
+          return;
+        }
+        const existing = getTopicStates()[entry.topic.topicId];
+        const value = updateDeArrowVerdictState(existing, {
+          originalTitle: entry.topic.originalTitle,
+          verdict: result.verdict,
+          reason: result.reason,
+          model: getModelName(currentApi),
+          timestamp
+        });
+        if (!value) return;
+        updates.push({ topicId: entry.topic.topicId, value });
+        successes.push({ entry, result, value });
+      });
+      if (updates.length > 0) {
+        const topicIds = updates.map((update) => update.topicId);
+        commitTopicStateUpdates(updates, {
+          topicId: topicIds.length === 1 ? topicIds[0] : "",
+          topicIds,
+          kind: "verdict"
+        });
+      }
+      successes.forEach(({ entry, value }) => {
+        runtimeErrors.delete(entry.key);
+        finalizeJudgmentEntry(entry, "resolve", value);
+        renderKey(entry.key);
+      });
+      missing.forEach((entry) => {
+        const error = new Error(`DeArrow 判定结果缺少话题 ${entry.topic.topicId}`);
+        error.code = "DEARROW_MISSING_JUDGMENT";
+        error.retryable = false;
+        recordRuntimeError({
+          key: entry.key,
+          topicId: entry.topic.topicId,
+          originalTitle: entry.topic.originalTitle,
+          error,
+          kind: "judgment",
+          baselineFingerprint: entry.baselineFingerprint
+        });
+        finalizeJudgmentEntry(entry, "reject", error);
+        renderKey(entry.key);
+      });
+    }
+    async function drainJudgmentQueue() {
+      if (drainPromise) return drainPromise;
+      drainScheduled = false;
+      drainPromise = (async () => {
+        while (!destroyed && judgmentQueue.size > 0) {
+          const entries = Array.from(judgmentQueue.values()).slice(0, DEARROW_BATCH_SIZE);
+          entries.forEach((entry) => judgmentQueue.delete(entry.key));
+          try {
+            await processJudgmentBatch(entries);
+          } catch (error) {
+            entries.forEach((entry) => {
+              if (entry.settled) return;
+              if (!isJudgmentEntryCurrent(entry)) {
+                rejectStaleJudgmentEntry(entry);
+                return;
+              }
+              recordRuntimeError({
+                key: entry.key,
+                topicId: entry.topic.topicId,
+                originalTitle: entry.topic.originalTitle,
+                error,
+                kind: "judgment",
+                baselineFingerprint: entry.baselineFingerprint
+              });
+              finalizeJudgmentEntry(entry, "reject", error);
+              renderKey(entry.key);
+            });
+          }
+        }
+      })().finally(() => {
+        drainPromise = null;
+        if (!destroyed && judgmentQueue.size > 0) scheduleQueueDrain();
+      });
+      return drainPromise;
+    }
+    function scheduleQueueDrain() {
+      if (drainScheduled || drainPromise || destroyed) return;
+      drainScheduled = true;
+      queueMicrotaskImpl(() => {
+        drainJudgmentQueue().catch((error) => deps.logger?.warn?.("[DeArrow] judgment queue failed:", error));
+      });
+    }
+    function ensureJudgment(topic, options = {}) {
+      const topicId = normalizeTopicId2(topic?.topicId);
+      const originalTitle = normalizeString2(topic?.originalTitle ?? topic?.title);
+      if (!topicId || !originalTitle) return Promise.reject(new Error("DeArrow 话题信息不完整"));
+      const key = makeKey(topicId, originalTitle);
+      const stored = getTopicStates()[topicId];
+      if (stored?.originalTitle === originalTitle && typeof stored.verdict === "boolean") {
+        return Promise.resolve(stored);
+      }
+      const existingPromise = judgmentInFlight.get(key);
+      if (existingPromise) return existingPromise;
+      const previousError = getCurrentRuntimeError(key, topicId, originalTitle);
+      if (previousError && options.retryErrors !== true) {
+        return Promise.reject(new Error(previousError.message));
+      }
+      runtimeErrors.delete(key);
+      const deferred = makeDeferred();
+      const entry = {
+        key,
+        topic: { topicId, originalTitle },
+        deferred,
+        baselineFingerprint: getSemanticBundleFingerprint(topicId, originalTitle, "judgment"),
+        settled: false
+      };
+      const previousOwner = judgmentOwnerByTopic.get(topicId);
+      if (previousOwner && previousOwner !== entry && !previousOwner.settled) {
+        if (judgmentQueue.delete(previousOwner.key)) {
+          finalizeJudgmentEntry(
+            previousOwner,
+            "reject",
+            createStaleOperationError("同一话题已有新标题等待判断")
+          );
+          renderKey(previousOwner.key);
+        }
+      }
+      judgmentOwnerByTopic.set(topicId, entry);
+      judgmentQueue.set(key, entry);
+      judgmentInFlight.set(key, deferred.promise);
+      renderKey(key);
+      scheduleQueueDrain();
+      return deferred.promise;
+    }
+    async function judgeTopics(topics, options = {}) {
+      const unique = /* @__PURE__ */ new Map();
+      (Array.isArray(topics) ? topics : []).forEach((topic) => {
+        const topicId = normalizeTopicId2(topic?.topicId);
+        const originalTitle = normalizeString2(topic?.originalTitle ?? topic?.title);
+        if (!topicId || !originalTitle) return;
+        unique.set(makeKey(topicId, originalTitle), { topicId, originalTitle });
+      });
+      const results = await Promise.allSettled(
+        Array.from(unique.values()).map((topic) => ensureJudgment(topic, options))
+      );
+      return results;
+    }
+    async function judgeVisibleTopics(options = {}) {
+      return judgeTopics(visibleDescriptors, options);
+    }
+    function applyRewriteToVisible(topicId, originalTitle, rewrittenTitle) {
+      visibleDescriptors = collectVisibleDescriptors();
+      let appliedCount = 0;
+      visibleDescriptors.forEach((descriptor) => {
+        if (descriptor.topicId !== topicId || descriptor.originalTitle !== originalTitle) return;
+        endOriginalTitlePreview(descriptor.button, "", {
+          force: true,
+          restore: false
+        });
+        descriptor.button.dataset.rewrittenTitle = rewrittenTitle;
+        descriptor.accessor.setText(rewrittenTitle);
+        suppressPreviewForCurrentInteraction(descriptor.button);
+        renderStoredState(descriptor);
+        appliedCount += 1;
+      });
+      return appliedCount;
+    }
+    function onContentRetry(operation, info = {}) {
+      if (!isRewriteOperationCurrent(operation)) return;
+      const attempt = Number(info.attempt || info.retryAttempt || 0);
+      const delayMs = Number(info.delayMs || info.delay || 0);
+      const seconds = Number(info.delaySeconds || 0) || (delayMs > 0 ? Math.round(delayMs / 1e3) : 0);
+      const message = seconds > 0 ? `内容提取被限流，${seconds} 秒后重试${attempt ? `（第 ${attempt} 次）` : ""}` : "内容提取被限流，稍后重试";
+      operation.phase = "retry-wait";
+      operation.message = message;
+      renderKey(operation.key);
+      const toastDelayMs = delayMs || seconds * 1e3;
+      deps.createToast?.(message, "warning", Math.max(2500, Math.min(toastDelayMs || 2500, 8e3)));
+    }
+    function assertRewriteOperationCurrent(operation) {
+      if (!isRewriteOperationCurrent(operation)) {
+        throw createStaleOperationError("标题或改写状态已更新，已忽略过期改写");
+      }
+    }
+    async function performRewrite(operation) {
+      const { topicId, originalTitle, key } = operation;
+      await ensureJudgment({ topicId, originalTitle }, { retryErrors: true });
+      assertRewriteOperationCurrent(operation);
+      operation.phase = "fetching-content";
+      operation.message = "正在提取首帖内容";
+      renderKey(key);
+      const currentApi = operation.currentApi;
+      if (!currentApi) throw new Error("DeArrow 没有可用的标题重写 API 配置");
+      if (typeof deps.fetchFirstPost !== "function") {
+        throw new Error("DeArrow 缺少首帖内容提取实现");
+      }
+      const payload = await deps.fetchFirstPost(topicId, {
+        currentApi,
+        onRetry: (info) => onContentRetry(operation, info)
+      });
+      assertRewriteOperationCurrent(operation);
+      const firstPostContext = extractDeArrowFirstPostContext(payload);
+      if (!firstPostContext.textContent && firstPostContext.images.length === 0) {
+        throw new Error("DeArrow 未能提取首帖文本或图片");
+      }
+      if (currentApi.imageInputEnabled === true && firstPostContext.images.length > 0) {
+        operation.message = `正在准备首帖图片（${firstPostContext.images.length} 张）`;
+        renderKey(key);
+      }
+      const imageContext = await prepareFirstPostImages(firstPostContext, currentApi);
+      assertRewriteOperationCurrent(operation);
+      const imageInputs = Array.isArray(imageContext.imageInputs) ? imageContext.imageInputs : [];
+      if (!firstPostContext.textContent && imageInputs.length === 0) {
+        const error = new Error(
+          currentApi.imageInputEnabled === true ? "DeArrow 首帖仅包含图片，但图片未能成功准备，无法进行可靠改写" : "DeArrow 首帖仅包含图片，请在标题重写 API 配置中开启图片输入"
+        );
+        error.code = "DEARROW_IMAGE_INPUT_REQUIRED";
+        error.retryable = false;
+        throw error;
+      }
+      const preparedImageIds = new Set(
+        imageInputs.map((image) => normalizeString2(image?.id)).filter(Boolean)
+      );
+      const preparedImages = firstPostContext.images.filter((image) => preparedImageIds.has(normalizeString2(image.id)));
+      const rewriteContent = [
+        firstPostContext.textContent,
+        preparedImages.map(formatDeArrowImagePlaceholder).join("\n")
+      ].filter(Boolean).join("\n");
+      operation.phase = "requesting-model";
+      operation.message = "正在根据首帖改写标题";
+      renderKey(key);
+      const response = await callCompletion(
+        buildDeArrowRewriteMessages({
+          originalTitle,
+          content: rewriteContent,
+          imageInputs
+        }),
+        "dearrow-rewrite",
+        currentApi
+      );
+      const rewrittenTitle = parseDeArrowRewriteResponse(response);
+      return {
+        topicId,
+        originalTitle,
+        rewrittenTitle,
+        model: getModelName(currentApi),
+        timestamp: now().toISOString()
+      };
+    }
+    function isOperationOriginalStillCurrent(topicId, originalTitle) {
+      const stored = getTopicStates()[topicId];
+      if (stored?.originalTitle && stored.originalTitle !== originalTitle) return false;
+      const liveItems = Array.from(documentRef?.querySelectorAll?.(".topic-list-item") || []).filter((item) => !isSoftHidden(item) && getTopicId(item) === topicId);
+      for (const item of liveItems) {
+        const accessor = getTitleAccessor(item);
+        if (!accessor) continue;
+        const displayedTitle = normalizeString2(accessor.getText?.());
+        if (displayedTitle === originalTitle) continue;
+        const button = item.querySelector?.(`.${DEARROW_BUTTON_CLASS}`);
+        const buttonOriginal = normalizeString2(button?.dataset?.originalTitle);
+        const buttonRewrite = normalizeString2(button?.dataset?.rewrittenTitle);
+        if (buttonOriginal === originalTitle && buttonRewrite && displayedTitle === buttonRewrite) {
+          continue;
+        }
+        if (stored?.originalTitle === originalTitle && stored.rewrittenTitle && displayedTitle === normalizeString2(stored.rewrittenTitle)) {
+          continue;
+        }
+        return false;
+      }
+      return true;
+    }
+    function isRewriteOperationCurrent(operation) {
+      if (!operation || destroyed || rewriteOwnerByTopic.get(operation.topicId) !== operation || !isOperationOriginalStillCurrent(operation.topicId, operation.originalTitle)) {
+        return false;
+      }
+      return getSemanticBundleFingerprint(
+        operation.topicId,
+        operation.originalTitle,
+        "rewrite"
+      ) === operation.rewriteBaselineFingerprint;
+    }
+    function commitRewriteResult(result) {
+      const existing = getTopicStates()[result.topicId];
+      const value = updateDeArrowRewriteState(existing, {
+        originalTitle: result.originalTitle,
+        rewrittenTitle: result.rewrittenTitle,
+        model: result.model,
+        timestamp: result.timestamp
+      });
+      commitTopicStateUpdates([{ topicId: result.topicId, value }], {
+        topicId: result.topicId,
+        topicIds: [result.topicId],
+        kind: "rewrite"
+      });
+      return { ...result, state: value };
+    }
+    function rewriteTopic(rawTopicId, options = {}) {
+      const topicId = normalizeTopicId2(rawTopicId);
+      let originalTitle = normalizeString2(options.originalTitle);
+      if (!originalTitle) {
+        originalTitle = visibleDescriptors.find((descriptor) => descriptor.topicId === topicId)?.originalTitle || getTopicStates()[topicId]?.originalTitle || "";
+      }
+      if (!topicId || !originalTitle) {
+        return Promise.reject(new Error("DeArrow 无法确定话题或原标题"));
+      }
+      const key = makeKey(topicId, originalTitle);
+      if (rewriteInFlight.has(key)) return rewriteInFlight.get(key);
+      const selectedRewriteApi = resolveApiForPurpose("rewrite");
+      const operation = {
+        key,
+        topicId,
+        originalTitle,
+        currentApi: selectedRewriteApi ? { ...selectedRewriteApi } : null,
+        phase: "awaiting-judgment",
+        message: "",
+        judgmentBaselineFingerprint: getSemanticBundleFingerprint(
+          topicId,
+          originalTitle,
+          "judgment"
+        ),
+        rewriteBaselineFingerprint: getSemanticBundleFingerprint(
+          topicId,
+          originalTitle,
+          "rewrite"
+        )
+      };
+      runtimeErrors.delete(key);
+      rewriteOwnerByTopic.set(topicId, operation);
+      renderKey(key);
+      let trackedPromise;
+      trackedPromise = performRewrite(operation).then((result) => {
+        const ownsKey = rewriteInFlight.get(key) === trackedPromise;
+        const ownsTopic = rewriteOwnerByTopic.get(topicId) === operation;
+        const isCurrent = ownsKey && ownsTopic && isRewriteOperationCurrent(operation);
+        if (ownsKey) rewriteInFlight.delete(key);
+        if (ownsTopic) rewriteOwnerByTopic.delete(topicId);
+        if (!isCurrent) {
+          if (!destroyed && isActive()) scheduleRefresh(0, { judge: false });
+          return { ...result, stale: true };
+        }
+        const committedResult = commitRewriteResult(result);
+        runtimeErrors.delete(key);
+        if (isActive()) {
+          applyRewriteToVisible(topicId, originalTitle, result.rewrittenTitle);
+          scheduleRefresh(0, { judge: false });
+        }
+        return committedResult;
+      }, (error) => {
+        const ownsKey = rewriteInFlight.get(key) === trackedPromise;
+        const ownsTopic = rewriteOwnerByTopic.get(topicId) === operation;
+        const isCurrent = ownsKey && ownsTopic && isRewriteOperationCurrent(operation);
+        if (ownsKey) rewriteInFlight.delete(key);
+        if (ownsTopic) rewriteOwnerByTopic.delete(topicId);
+        if (isStaleOperationError(error) || !isCurrent) {
+          if (!destroyed && isActive()) scheduleRefresh(0, { judge: false });
+          return { topicId, originalTitle, stale: true };
+        }
+        if (!destroyed) {
+          const errorKind = operation.phase === "awaiting-judgment" ? "judgment" : "rewrite";
+          const baselineFingerprint = errorKind === "judgment" ? operation.judgmentBaselineFingerprint : operation.rewriteBaselineFingerprint;
+          const message = normalizeError(error, "DeArrow 改写失败");
+          const recorded = recordRuntimeError({
+            key,
+            topicId,
+            originalTitle,
+            error,
+            kind: errorKind,
+            baselineFingerprint
+          });
+          if (recorded && isActive()) {
+            renderKey(key);
+            const label = errorKind === "judgment" ? "判断" : "改写";
+            deps.createToast?.(`DeArrow ${label}失败：${message}`, "error", 4200);
+          }
+        }
+        throw error;
+      });
+      rewriteInFlight.set(key, trackedPromise);
+      return trackedPromise;
+    }
+    async function refresh(options = {}) {
+      if (destroyed) return { active: false, count: 0, judgments: [] };
+      if (!isActive(options.url)) {
+        cleanup();
+        return { active: false, count: 0, judgments: [] };
+      }
+      visibleDescriptors = collectVisibleDescriptors();
+      const unique = /* @__PURE__ */ new Map();
+      visibleDescriptors.forEach((descriptor) => {
+        const hasCachedState = renderStoredState(descriptor);
+        if (!hasCachedState) unique.set(descriptor.key, descriptor);
+      });
+      const judgments = options.judge === false ? [] : await judgeTopics(Array.from(unique.values()), { retryErrors: options.retryErrors === true });
+      return { active: true, count: visibleDescriptors.length, judgments };
+    }
+    function scheduleRefresh(delay = 120, options = {}) {
+      if (refreshTimer !== null) clearTimeoutImpl?.(refreshTimer);
+      refreshTimer = setTimeoutImpl?.(() => {
+        refreshTimer = null;
+        refresh(options).catch((error) => deps.logger?.warn?.("[DeArrow] refresh failed:", error));
+      }, Math.max(0, Number(delay) || 0));
+      return refreshTimer;
+    }
+    function hasButtonCoverage() {
+      if (!isActive()) return true;
+      const items = Array.from(documentRef?.querySelectorAll?.(".topic-list-item") || []);
+      return items.filter((item) => !isSoftHidden(item) && getTopicId(item) && getTitleAccessor(item)).every((item) => {
+        const topicId = getTopicId(item);
+        const accessor = getTitleAccessor(item);
+        const buttons = Array.from(item.querySelectorAll?.(`.${DEARROW_BUTTON_CLASS}`) || []);
+        if (buttons.length !== 1) return false;
+        const button = buttons[0];
+        if (normalizeTopicId2(button.dataset?.topicId) !== topicId || !item.classList?.contains?.("has-dearrow-button")) {
+          return false;
+        }
+        const hasSummaryButton = Boolean(item.querySelector?.(".topic-summary-button"));
+        if (hasSummaryButton !== item.classList?.contains?.("has-summary-button")) return false;
+        if (item.classList?.contains?.("bookmark-list-item")) {
+          const flowTarget = getBookmarkFlowTarget(item);
+          const stack = item.querySelector?.(".topic-dearrow-control-stack");
+          if (!flowTarget || !stack || stack.parentNode !== flowTarget || button.parentNode !== stack) {
+            return false;
+          }
+        } else {
+          const expectedTarget = typeof deps.getButtonMountTarget === "function" ? deps.getButtonMountTarget(item) : item.querySelector?.(".main-link") || item.querySelector?.("td:nth-child(2)") || item;
+          if (!expectedTarget || button.parentNode !== expectedTarget) return false;
+        }
+        const displayedTitle = normalizeString2(accessor?.getText?.());
+        const originalTitle = normalizeString2(button.dataset?.originalTitle);
+        const rewrittenTitle = normalizeString2(button.dataset?.rewrittenTitle);
+        if (!displayedTitle || !originalTitle) return false;
+        const key = makeKey(topicId, originalTitle);
+        const stored = getTopicStates()[topicId];
+        if (stored?.originalTitle && stored.originalTitle !== originalTitle) return false;
+        if (rewriteInFlight.has(key)) {
+          return displayedTitle === originalTitle || displayedTitle === rewrittenTitle;
+        }
+        if (stored?.originalTitle === originalTitle && stored.rewrittenTitle) {
+          if (originalTitlePreviews.has(button)) return displayedTitle === originalTitle;
+          return displayedTitle === normalizeString2(stored.rewrittenTitle);
+        }
+        return displayedTitle === originalTitle || displayedTitle === rewrittenTitle;
+      });
+    }
+    function shouldRefreshFromMutations(mutations) {
+      if (!isActive()) return false;
+      for (const mutation of Array.isArray(mutations) ? mutations : []) {
+        if (mutation?.type === "characterData") {
+          const parent = mutation.target?.parentElement;
+          if (parent?.closest?.(TITLE_SELECTORS.join(",")) && !parent.closest?.(SKIPPED_TITLE_CONTAINER_SELECTOR) && parent.closest?.(".topic-list-item")) {
+            return true;
+          }
+          continue;
+        }
+        if (mutation?.type === "attributes") {
+          const target = mutation.target;
+          if (mutation.attributeName === "class" && target?.matches?.(".topic-list-item")) {
+            const hasDeArrowButton = Boolean(target.querySelector?.(`.${DEARROW_BUTTON_CLASS}`));
+            const hasSummaryButton = Boolean(target.querySelector?.(".topic-summary-button"));
+            if (hasDeArrowButton !== target.classList?.contains?.("has-dearrow-button") || hasSummaryButton !== target.classList?.contains?.("has-summary-button")) {
+              return true;
+            }
+            continue;
+          }
+          if (mutation.attributeName === "data-topic-id" && target?.matches?.(".topic-list-item")) {
+            return true;
+          }
+          if (mutation.attributeName === "href" && target?.matches?.(TITLE_SELECTORS.join(",")) && target.closest?.(".topic-list-item")) {
+            return true;
+          }
+          continue;
+        }
+        if (mutation?.type !== "childList") continue;
+        const nodes = [...Array.from(mutation.addedNodes || []), ...Array.from(mutation.removedNodes || [])];
+        let hasMeaningfulNode = false;
+        for (const node of nodes) {
+          if (!node) continue;
+          if (node.nodeType === 3) {
+            const parent = node.parentElement || mutation.target;
+            if (parent?.closest?.(TITLE_SELECTORS.join(",")) && !parent.closest?.(SKIPPED_TITLE_CONTAINER_SELECTOR) && parent.closest?.(".topic-list-item")) {
+              return true;
+            }
+            continue;
+          }
+          if (node.nodeType !== 1) continue;
+          if (node.matches?.(`.${DEARROW_BUTTON_CLASS}`) || node.closest?.(`.${DEARROW_BUTTON_CLASS}`)) continue;
+          hasMeaningfulNode = true;
+          if (node.matches?.(".topic-list-item") || node.querySelector?.(".topic-list-item")) return true;
+        }
+        if (hasMeaningfulNode && mutation.target?.closest?.(".topic-list, .topic-list-body, .topic-list-item")) return true;
+      }
+      return false;
+    }
+    function destroy() {
+      destroyed = true;
+      if (refreshTimer !== null) clearTimeoutImpl?.(refreshTimer);
+      refreshTimer = null;
+      cleanup();
+      const error = new Error("DeArrow 功能已销毁");
+      judgmentQueue.forEach((entry) => entry.deferred.reject(error));
+      judgmentQueue.clear();
+      judgmentInFlight.clear();
+      judgmentOwnerByTopic.clear();
+      rewriteInFlight.clear();
+      rewriteOwnerByTopic.clear();
+      runtimeErrors.clear();
+    }
+    return {
+      isActive,
+      refresh,
+      addDeArrowButtons: refresh,
+      scheduleRefresh,
+      cleanup,
+      removeDeArrowButtons: cleanup,
+      destroy,
+      judgeTopics,
+      judgeVisibleTopics,
+      rewriteTopic,
+      hasButtonCoverage,
+      shouldRefreshFromMutations,
+      getTopicStates,
+      getInFlightJudgmentCount: () => judgmentInFlight.size,
+      getInFlightRewriteCount: () => rewriteInFlight.size
     };
   }
 
@@ -13260,6 +17266,11 @@ ${error.stack}`);
   var listPageSummaryMaxLines;
   var listPageSummaryEnabled;
   var autoShowSummaryInList;
+  var dearrowEnabled;
+  var dearrowJudgmentApiIndex;
+  var dearrowRewriteApiIndex;
+  var dearrowScopeRules;
+  var dearrowTopicStates;
   var toastEnabled;
   var toastSettings;
   var driveSummarySettings;
@@ -13267,6 +17278,7 @@ ${error.stack}`);
   var summaryOutputFilters;
   var summaryTopicIds;
   var toastAutoExpand;
+  var toastClickAutoOpenSidebar;
   var summaryWidthType;
   var summaryWidthValue;
   var runtime;
@@ -13283,6 +17295,7 @@ ${error.stack}`);
   var sidebarUIFeature = null;
   var topicSummaryFeature = null;
   var topicListFeature = null;
+  var dearrowFeature = null;
   var questionAnswerFeature = null;
   var settingsController = null;
   var resetDriveSummaryAuthCache = () => {
@@ -13322,6 +17335,10 @@ ${error.stack}`);
   var rebuildSummaryTopicIdsFromDrive;
   var uploadSummaryHistoryToDrive;
   var scheduleDriveSummarySync;
+  var markDriveDeArrowDirty;
+  var pullDeArrowStateFromDrive;
+  var uploadDeArrowStateToDrive;
+  var resetDriveDeArrowPullState;
   var appContextInitialized = false;
   var publicApi = null;
   var appInstance = null;
@@ -13359,6 +17376,114 @@ ${error.stack}`);
       }
     };
   }
+  function openSidebarIfClosedForToastClick({
+    enabled,
+    sidebar,
+    openSidebar
+  } = {}) {
+    if (!enabled || !sidebar?.classList || typeof openSidebar !== "function") {
+      return false;
+    }
+    if (sidebar.classList.contains("open")) {
+      return false;
+    }
+    openSidebar();
+    return true;
+  }
+  function normalizeToastActionTopicId(topicId) {
+    if (topicId === null || topicId === void 0) return "";
+    return String(topicId).trim();
+  }
+  function scheduleToastDeferredAction(action) {
+    if (typeof action !== "function") return false;
+    const run = () => {
+      try {
+        action();
+      } catch (error) {
+        console.error("[LINUX DO Summary] Toast deferred action failed:", error);
+      }
+    };
+    if (typeof requestAnimationFrame === "function" && typeof setTimeout === "function") {
+      requestAnimationFrame(() => {
+        setTimeout(run, 0);
+      });
+      return true;
+    }
+    if (typeof setTimeout === "function") {
+      setTimeout(run, 0);
+      return true;
+    }
+    Promise.resolve().then(run);
+    return true;
+  }
+  function queueToastAutoExpand({
+    topicId,
+    shouldAutoExpandSummary,
+    expandSummaryRow,
+    isSummaryRowExpanded,
+    scheduleToastAutoExpand
+  } = {}) {
+    if (!shouldAutoExpandSummary || typeof expandSummaryRow !== "function") {
+      return false;
+    }
+    if (typeof isSummaryRowExpanded === "function" && isSummaryRowExpanded(topicId)) {
+      return false;
+    }
+    const schedule = typeof scheduleToastAutoExpand === "function" ? scheduleToastAutoExpand : scheduleToastDeferredAction;
+    schedule(() => expandSummaryRow(topicId));
+    return true;
+  }
+  function handleToastClickAction({
+    topicId,
+    toastId,
+    toastType = "info",
+    onTopicPage = false,
+    currentTopicId = null,
+    toastAutoExpand: shouldAutoExpandSummary = false,
+    findRecommendedElement,
+    scrollToAndHighlightTopic: scrollToAndHighlightTopic2,
+    expandSummaryRowInList: expandSummaryRowInList2,
+    expandSummaryRowInRecommended: expandSummaryRowInRecommended2,
+    isSummaryRowExpanded,
+    scheduleToastAutoExpand,
+    toastScrollBehavior = "auto",
+    openSidebarForToastClick: openSidebarForToastClick2,
+    removeToast: removeToast2
+  } = {}) {
+    const normalizedTopicId = normalizeToastActionTopicId(topicId);
+    if (!normalizedTopicId) return null;
+    if (!onTopicPage) {
+      scrollToAndHighlightTopic2?.(normalizedTopicId, toastType, { behavior: toastScrollBehavior });
+      removeToast2?.(toastId);
+      queueToastAutoExpand({
+        topicId: normalizedTopicId,
+        shouldAutoExpandSummary,
+        expandSummaryRow: expandSummaryRowInList2,
+        isSummaryRowExpanded,
+        scheduleToastAutoExpand
+      });
+      return "list";
+    }
+    const normalizedCurrentTopicId = normalizeToastActionTopicId(currentTopicId);
+    if (normalizedCurrentTopicId === normalizedTopicId) {
+      openSidebarForToastClick2?.();
+      removeToast2?.(toastId);
+      return "topic-current";
+    }
+    if (findRecommendedElement?.(normalizedTopicId)) {
+      scrollToAndHighlightTopic2?.(normalizedTopicId, toastType, { behavior: toastScrollBehavior });
+      removeToast2?.(toastId);
+      queueToastAutoExpand({
+        topicId: normalizedTopicId,
+        shouldAutoExpandSummary,
+        expandSummaryRow: expandSummaryRowInRecommended2,
+        isSummaryRowExpanded,
+        scheduleToastAutoExpand
+      });
+      return "topic-recommended";
+    }
+    return null;
+  }
   function getCurrentApiConfiguration() {
     currentApiIndex = normalizeCurrentApiIndex(currentApiIndex, apiConfigurations);
     return apiConfigurations[currentApiIndex] || createDefaultApiConfiguration();
@@ -13382,12 +17507,31 @@ ${error.stack}`);
     };
     apiConfigurations = normalizeApiConfigurations(apiConfigurations, retryFallback);
     currentApiIndex = normalizeCurrentApiIndex(currentApiIndex, apiConfigurations);
+    dearrowJudgmentApiIndex = normalizeDeArrowApiIndex(dearrowJudgmentApiIndex, apiConfigurations);
+    dearrowRewriteApiIndex = normalizeDeArrowApiIndex(dearrowRewriteApiIndex, apiConfigurations);
     gmSetValue("apiConfigurations", apiConfigurations);
     gmSetValue("currentApiIndex", currentApiIndex);
+    gmSetValue("dearrowJudgmentApiIndex", dearrowJudgmentApiIndex);
+    gmSetValue("dearrowRewriteApiIndex", dearrowRewriteApiIndex);
     if (options.syncRetrySettings === false) {
       return getCurrentApiConfiguration();
     }
     return syncAutoRetrySettingsFromCurrentApiConfiguration();
+  }
+  function getDeArrowTopicStatesSnapshot() {
+    dearrowTopicStates = normalizeDeArrowTopicStates(dearrowTopicStates);
+    return dearrowTopicStates;
+  }
+  function setDeArrowTopicStatesSnapshot(nextStates, meta = {}) {
+    dearrowTopicStates = normalizeDeArrowTopicStates(nextStates);
+    gmSetValue("dearrowTopicStates", dearrowTopicStates);
+    if (runtime) {
+      syncRuntimeConfigValue("dearrowTopicStates", dearrowTopicStates);
+    }
+    if (dearrowFeature && meta.refresh !== false) {
+      dearrowFeature.scheduleRefresh?.(0, { judge: false });
+    }
+    return dearrowTopicStates;
   }
   function loadDriveSummarySettings() {
     const raw = gmGetValue(DRIVE_SUMMARY_SETTINGS_KEY, null);
@@ -13423,11 +17567,20 @@ ${error.stack}`);
   }
   function persistDriveSummarySettings(patch = {}) {
     const prev = { ...driveSummarySettings };
+    const wasUsable = prev.enabled === true && Boolean(prev.clientId && prev.clientSecret && prev.refreshToken);
     driveSummarySettings = normalizeDriveSummarySettings({ ...driveSummarySettings, ...patch });
-    if (prev.clientId !== driveSummarySettings.clientId || prev.clientSecret !== driveSummarySettings.clientSecret || prev.refreshToken !== driveSummarySettings.refreshToken) {
+    const credentialsChanged = prev.clientId !== driveSummarySettings.clientId || prev.clientSecret !== driveSummarySettings.clientSecret || prev.refreshToken !== driveSummarySettings.refreshToken;
+    if (credentialsChanged) {
       resetDriveSummaryAuthCache();
     }
     gmSetValue(DRIVE_SUMMARY_SETTINGS_KEY, driveSummarySettings);
+    const isUsable = driveSummarySettings.enabled === true && Boolean(
+      driveSummarySettings.clientId && driveSummarySettings.clientSecret && driveSummarySettings.refreshToken
+    );
+    if ((!wasUsable || credentialsChanged) && isUsable && dearrowFeature?.isActive?.()) {
+      resetDriveDeArrowPullState?.();
+      Promise.resolve(refreshDeArrowForCurrentPage({ pullDrive: true, judge: false })).catch((error) => console.warn("[DeArrow] Drive activation hydrate failed:", error));
+    }
     return driveSummarySettings;
   }
   function loadSummaryTopicIds() {
@@ -13529,6 +17682,20 @@ ${error.stack}`);
     listPageSummaryMaxLines = gmGetValue("listPageSummaryMaxLines", 6);
     listPageSummaryEnabled = gmGetValue("listPageSummaryEnabled", true);
     autoShowSummaryInList = gmGetValue("autoShowSummaryInList", true);
+    const legacyDeArrowApiIndex = gmGetValue("dearrowApiIndex", 0);
+    const dearrowSettings = normalizeDeArrowSettings({
+      dearrowEnabled: gmGetValue("dearrowEnabled", defaultDeArrowSettings.dearrowEnabled),
+      dearrowJudgmentApiIndex: gmGetValue("dearrowJudgmentApiIndex", legacyDeArrowApiIndex),
+      dearrowRewriteApiIndex: gmGetValue("dearrowRewriteApiIndex", legacyDeArrowApiIndex),
+      dearrowScopeRules: gmGetValue("dearrowScopeRules", defaultDeArrowSettings.dearrowScopeRules)
+    }, apiConfigurations);
+    dearrowEnabled = dearrowSettings.dearrowEnabled;
+    dearrowJudgmentApiIndex = dearrowSettings.dearrowJudgmentApiIndex;
+    dearrowRewriteApiIndex = dearrowSettings.dearrowRewriteApiIndex;
+    dearrowScopeRules = dearrowSettings.dearrowScopeRules;
+    gmSetValue("dearrowJudgmentApiIndex", dearrowJudgmentApiIndex);
+    gmSetValue("dearrowRewriteApiIndex", dearrowRewriteApiIndex);
+    dearrowTopicStates = normalizeDeArrowTopicStates(gmGetValue("dearrowTopicStates", {}));
     toastEnabled = gmGetValue("toastEnabled", true);
     toastSettings = gmGetValue("toastSettings", createDefaultToastSettings());
     driveSummarySettings = loadDriveSummarySettings();
@@ -13545,6 +17712,7 @@ ${error.stack}`);
       }
     }
     toastAutoExpand = gmGetValue("toastAutoExpand", true);
+    toastClickAutoOpenSidebar = gmGetValue("toastClickAutoOpenSidebar", true);
     summaryWidthType = gmGetValue("summaryWidthType", "percent");
     summaryWidthValue = gmGetValue("summaryWidthValue", 100);
     runtime = createAppRuntime({
@@ -13559,9 +17727,15 @@ ${error.stack}`);
         listPageSummaryMaxLines,
         listPageSummaryEnabled,
         autoShowSummaryInList,
+        dearrowEnabled,
+        dearrowJudgmentApiIndex,
+        dearrowRewriteApiIndex,
+        dearrowScopeRules,
+        dearrowTopicStates,
         toastEnabled,
         toastSettings,
         toastAutoExpand,
+        toastClickAutoOpenSidebar,
         summaryWidthOffset,
         summaryWidthType,
         summaryWidthValue,
@@ -13661,6 +17835,26 @@ ${error.stack}`);
       autoShowSummaryInList = value;
       syncRuntimeConfigValue("autoShowSummaryInList", value);
     });
+    defineValue("dearrowEnabled", () => dearrowEnabled, (value) => {
+      dearrowEnabled = value === true;
+      syncRuntimeConfigValue("dearrowEnabled", dearrowEnabled);
+    });
+    defineValue("dearrowJudgmentApiIndex", () => dearrowJudgmentApiIndex, (value) => {
+      dearrowJudgmentApiIndex = normalizeDeArrowApiIndex(value, apiConfigurations);
+      syncRuntimeConfigValue("dearrowJudgmentApiIndex", dearrowJudgmentApiIndex);
+    });
+    defineValue("dearrowRewriteApiIndex", () => dearrowRewriteApiIndex, (value) => {
+      dearrowRewriteApiIndex = normalizeDeArrowApiIndex(value, apiConfigurations);
+      syncRuntimeConfigValue("dearrowRewriteApiIndex", dearrowRewriteApiIndex);
+    });
+    defineValue("dearrowScopeRules", () => dearrowScopeRules, (value) => {
+      dearrowScopeRules = normalizeDeArrowScopeRules(value);
+      syncRuntimeConfigValue("dearrowScopeRules", dearrowScopeRules);
+    });
+    defineValue("dearrowTopicStates", () => dearrowTopicStates, (value) => {
+      dearrowTopicStates = normalizeDeArrowTopicStates(value);
+      syncRuntimeConfigValue("dearrowTopicStates", dearrowTopicStates);
+    });
     defineValue("toastEnabled", () => toastEnabled, (value) => {
       toastEnabled = value;
       syncRuntimeConfigValue("toastEnabled", value);
@@ -13672,6 +17866,10 @@ ${error.stack}`);
     defineValue("toastAutoExpand", () => toastAutoExpand, (value) => {
       toastAutoExpand = value;
       syncRuntimeConfigValue("toastAutoExpand", value);
+    });
+    defineValue("toastClickAutoOpenSidebar", () => toastClickAutoOpenSidebar, (value) => {
+      toastClickAutoOpenSidebar = value;
+      syncRuntimeConfigValue("toastClickAutoOpenSidebar", value);
     });
     defineValue("summaryTopicIds", () => summaryTopicIds, (value) => {
       summaryTopicIds = value instanceof Set ? value : new Set(value || []);
@@ -13736,18 +17934,18 @@ ${error.stack}`);
     return normalized;
   }
   function getTopicQuestionHistory(topicId) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return [];
     const historyMap = getTopicQuestionHistoryMapSnapshot();
     return historyMap[normalizedTopicId] || [];
   }
   function createTopicQuestionRecordId(topicId) {
-    const normalizedTopicId = normalizeTopicId(topicId) || "topic";
+    const normalizedTopicId = normalizeTopicId3(topicId) || "topic";
     const randomPart = Math.random().toString(36).slice(2, 8);
     return `${normalizedTopicId}-${Date.now()}-${randomPart}`;
   }
   function saveTopicQuestionAnswer(topicId, record = {}) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return [];
     const currentMap = getTopicQuestionHistoryMapSnapshot({ force: true, maxAgeMs: 0 }) || {};
     const nextMap = { ...currentMap };
@@ -13827,7 +18025,7 @@ ${error.stack}`);
       normalizeHistoryListForDisplay: (...args) => normalizeHistoryListForDisplay(...args),
       onSubmit: (event) => handleFormSubmit(event),
       onQuestionClick: () => {
-        const topicId = normalizeTopicId(document.getElementById("building")?.value || extractTopicId());
+        const topicId = normalizeTopicId3(document.getElementById("building")?.value || extractTopicId());
         questionAnswerFeature?.openSidebarQuestionPanel?.(topicId);
       },
       onToggleSidebar: () => toggleSidebar()
@@ -13854,6 +18052,10 @@ ${error.stack}`);
       setSummaryHistoryMapSnapshot,
       getTopicQuestionHistoryMapSnapshot,
       setTopicQuestionHistoryMapSnapshot,
+      getDeArrowTopicStates: getDeArrowTopicStatesSnapshot,
+      setDeArrowTopicStates: setDeArrowTopicStatesSnapshot,
+      normalizeDeArrowTopicStates,
+      mergeDeArrowTopicStates,
       replaceSummaryTopicIdsFromHistoryMap,
       syncSummaryTopicIdsFromSources,
       markTopicSummarized,
@@ -13876,7 +18078,11 @@ ${error.stack}`);
       pullTopicQuestionHistoryFromDrive,
       rebuildSummaryTopicIdsFromDrive,
       uploadSummaryHistoryToDrive,
-      scheduleDriveSummarySync
+      scheduleDriveSummarySync,
+      markDriveDeArrowDirty,
+      pullDeArrowStateFromDrive,
+      uploadDeArrowStateToDrive,
+      resetDriveDeArrowPullState
     } = driveSummaryFeature);
     topicSummaryFeature = createTopicSummaryFeature({
       state,
@@ -13904,7 +18110,8 @@ ${error.stack}`);
       normalizeAutoRetryInterval,
       extractTopicId,
       isTopicPageUrl,
-      setTopicTitle
+      setTopicTitle,
+      imageRequest: (...args) => gmXmlhttpRequest(...args)
     });
     questionAnswerFeature = createQuestionAnswerFeature({
       state,
@@ -13912,6 +18119,9 @@ ${error.stack}`);
       getQuestionHistory: (...args) => getTopicQuestionHistory(...args),
       getQuestionPromptPresets,
       askTopicQuestion,
+      getCurrentApiConfiguration,
+      normalizeAutoRetryCount,
+      normalizeAutoRetryInterval,
       pullTopicQuestionHistoryFromDrive: (...args) => pullTopicQuestionHistoryFromDrive?.(...args),
       setQuestionHtml: (...args) => setSummaryElementHtml(...args)
     });
@@ -13937,11 +18147,43 @@ ${error.stack}`);
       loadHistoryForCurrentTopic: (...args) => topicSummaryFeature?.loadHistoryForCurrentTopic?.(...args),
       updateSidebarSubmitButtonState: (...args) => topicSummaryFeature?.updateSidebarSubmitButtonState?.(...args),
       getFullFloorRangeForTopic: (...args) => topicSummaryFeature?.getFullFloorRangeForTopic?.(...args),
+      getCurrentApiConfiguration,
       main: (...args) => topicSummaryFeature?.main?.(...args),
       extractTopicIdFromElement,
       isListSummaryPageUrl,
       isSummarySelectionLocked,
       openListQuestionPanel: (...args) => questionAnswerFeature?.openListQuestionPanel?.(...args)
+    });
+    dearrowFeature = createDeArrowFeature({
+      state,
+      getConfig: () => ({
+        dearrowEnabled,
+        dearrowJudgmentApiIndex,
+        dearrowRewriteApiIndex,
+        dearrowScopeRules,
+        apiConfigurations
+      }),
+      getCurrentUrl: () => currentPageUrl,
+      getApiConfigurations: () => apiConfigurations,
+      extractTopicIdFromElement,
+      requestCompletion: ({ currentApi, messages }) => requestChatCompletion({
+        currentApi,
+        messages,
+        fetchImpl: fetch
+      }),
+      fetchFirstPost: fetchDeArrowFirstPost,
+      imageRequest: (...args) => gmXmlhttpRequest(...args),
+      imageFetch: fetch,
+      getTopicStates: getDeArrowTopicStatesSnapshot,
+      setTopicStates: (nextStates, meta) => setDeArrowTopicStatesSnapshot(nextStates, {
+        ...meta,
+        refresh: false
+      }),
+      scheduleDriveSync: (meta = {}) => {
+        if (meta.source === "drive" || meta.skipDriveSync) return;
+        markDriveDeArrowDirty?.();
+      },
+      createToast
     });
     settingsController = createSettingsController({
       state,
@@ -13961,6 +18203,10 @@ ${error.stack}`);
       normalizeAutoRetryCount,
       normalizeAutoRetryInterval,
       normalizeCurrentApiIndex,
+      normalizeDeArrowApiIndex,
+      normalizeDeArrowScopeRules,
+      validateDeArrowScopeRules,
+      normalizeDeArrowTopicStates,
       normalizeSummaryOutputFilters,
       normalizeSummaryWidthOffset,
       sanitizeSummaryTopicIds,
@@ -13977,9 +18223,12 @@ ${error.stack}`);
       setSummaryHistoryMap: (historyMap) => setSummaryHistoryMapSnapshot(historyMap),
       getTopicQuestionHistoryMap: () => getTopicQuestionHistoryMapSnapshot(),
       setTopicQuestionHistoryMap: (historyMap) => setTopicQuestionHistoryMapSnapshot(historyMap),
+      getDeArrowTopicStates: getDeArrowTopicStatesSnapshot,
+      setDeArrowTopicStates: setDeArrowTopicStatesSnapshot,
       syncSummaryTopicIdsFromSources,
       replaceSummaryTopicIdsFromHistoryMap,
       markDriveSummaryTopicsDirty,
+      markDriveDeArrowDirty,
       scheduleDriveSummarySync,
       updateAllSummaryButtonsAndContainers: (...args) => topicListFeature?.updateAllSummaryButtonsAndContainers?.(...args),
       refreshListSummaryForCurrentPage,
@@ -13988,8 +18237,10 @@ ${error.stack}`);
       addTopicListSummaryButtons: (...args) => topicListFeature?.addTopicListSummaryButtons?.(...args),
       restoreExpandedSummaryRows: (...args) => topicListFeature?.restoreExpandedSummaryRows?.(...args),
       updateListSummaryStyles: (...args) => topicListFeature?.updateListSummaryStyles?.(...args),
+      refreshDeArrowForCurrentPage,
       updateSidebarSubmitButtonState: (...args) => topicSummaryFeature?.updateSidebarSubmitButtonState?.(...args),
       uploadSummaryHistoryToDrive,
+      uploadDeArrowStateToDrive,
       rebuildSummaryTopicIdsFromDrive,
       getDriveSummarySettings: () => driveSummarySettings,
       extractTopicId,
@@ -14000,20 +18251,21 @@ ${error.stack}`);
     });
     appendSettingsToastStyles();
   }
-  function normalizeTopicId(topicId) {
+  function normalizeTopicId3(topicId) {
     return normalizeSummaryTopicId(topicId);
   }
   function isSidebarWidthScriptActive() {
     const sidebarWidth = localStorage.getItem("discourseSidebarWidth");
     return sidebarWidth !== null;
   }
-  async function summarizeSomething(txt) {
-    const currentApi = getCurrentApiConfiguration();
+  async function summarizeSomething(txt, options = {}) {
+    const currentApi = options.currentApi || getCurrentApiConfiguration();
     try {
       return await requestSummaryCompletion({
         currentApi,
         promptConfig: state.promptConfigurations[state.currentPromptIndex],
         txt,
+        imageInputs: options.imageInputs || [],
         fetchImpl: fetch
       });
     } catch (error) {
@@ -14025,6 +18277,7 @@ ${error.stack}`);
     topicId,
     title,
     contentText,
+    imageInputs = [],
     question,
     questionHistory = []
   } = {}) {
@@ -14036,12 +18289,13 @@ ${error.stack}`);
     const userContent = [
       "请基于下面的 LINUX DO 话题及回复回答用户问题。",
       title ? `话题标题：${title}` : `话题ID：${topicId}`,
+      imageInputs.length ? `本次请求附带了 ${imageInputs.length} 张话题图片，请结合图片视觉内容和正文中的 [图片#] 占位符回答。` : "",
       historyText ? `已有问答历史：
 ${historyText}` : "已有问答历史：暂无",
       `用户问题：${question}`,
       "原文如下：",
       contentText || ""
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
     return [
       {
         role: "system",
@@ -14052,11 +18306,11 @@ ${historyText}` : "已有问答历史：暂无",
           "如果证据不足，请明确说明仍需确认。"
         ].join("\n")
       },
-      { role: "user", content: userContent }
+      { role: "user", content: buildUserContentWithImages(userContent, imageInputs) }
     ];
   }
   async function askTopicQuestion({ topicId, question, preset = {} } = {}) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     const normalizedQuestion = question === null || question === void 0 ? "" : String(question).trim();
     if (!normalizedTopicId) {
       throw new Error("无法获取当前主题ID");
@@ -14065,7 +18319,10 @@ ${historyText}` : "已有问答历史：暂无",
       throw new Error("问题不能为空");
     }
     const currentApi = getCurrentApiConfiguration();
-    const topicContext = await topicSummaryFeature?.buildTopicQuestionContext?.(normalizedTopicId);
+    const topicContext = await topicSummaryFeature?.buildTopicQuestionContext?.(
+      normalizedTopicId,
+      currentApi
+    );
     if (!topicContext?.contentText) {
       throw new Error("未能获取到帖子内容");
     }
@@ -14074,6 +18331,7 @@ ${historyText}` : "已有问答历史：暂无",
       topicId: normalizedTopicId,
       title: topicContext.title,
       contentText: topicContext.contentText,
+      imageInputs: topicContext.imageInputs || [],
       question: normalizedQuestion,
       questionHistory
     });
@@ -14138,7 +18396,7 @@ ${historyText}` : "已有问答历史：暂无",
     }
   }
   function saveSummaryHistory(topicId, summary, model, requestContext = {}) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return [];
     const currentHistoryMap = getSummaryHistoryMapSnapshot({ force: true, maxAgeMs: 0 }) || {};
     const nextHistoryMap = { ...currentHistoryMap };
@@ -14161,13 +18419,13 @@ ${historyText}` : "已有问答历史：暂无",
     return nextHistoryMap[normalizedTopicId];
   }
   function autoShowHistoryIfExists(topicId) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId || !isTopicPageUrl(currentPageUrl)) {
       setSidebarHistoryButtonActive(false);
       return false;
     }
     const buildingInput = document.getElementById("building");
-    const activeTopicId = normalizeTopicId(buildingInput?.value || extractTopicId());
+    const activeTopicId = normalizeTopicId3(buildingInput?.value || extractTopicId());
     if (activeTopicId && activeTopicId !== normalizedTopicId) {
       return false;
     }
@@ -14216,6 +18474,30 @@ ${historyText}` : "已有问答历史：暂无",
       credentials: "include"
     };
   }
+  async function fetchDeArrowFirstPost(topicId, { currentApi, onRetry } = {}) {
+    const normalizedTopicId = normalizeTopicId3(topicId);
+    if (!normalizedTopicId) {
+      throw new Error("DeArrow 话题 ID 无效");
+    }
+    const response = await fetchLinuxDoContentWith429Retry(
+      `https://linux.do/t/${normalizedTopicId}.json`,
+      getFetchOptions(),
+      {
+        fetchImpl: fetch,
+        retryCount: normalizeAutoRetryCount(
+          currentApi?.retryCount,
+          DEFAULT_AUTO_RETRY_COUNT
+        ),
+        onRetry
+      }
+    );
+    if (!response.ok) {
+      const error = new Error(`DeArrow 获取首帖失败：HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return response.json();
+  }
   function handleFormSubmit(event) {
     hideSidebarQuestionPanel();
     return topicSummaryFeature?.handleFormSubmit?.(event);
@@ -14238,11 +18520,44 @@ ${historyText}` : "已有问答历史：暂无",
   function expandSummaryRowByTopicId(topicId, options = {}) {
     return topicListFeature?.expandSummaryRowByTopicId?.(topicId, options);
   }
+  function isSummaryRowExpandedInList(topicId) {
+    return topicListFeature?.isSummaryRowExpandedByTopicId?.(topicId) ?? false;
+  }
   function hasListSummaryButtonsCoverage() {
     return topicListFeature?.hasListSummaryButtonsCoverage?.() ?? true;
   }
   function shouldRefreshListSummaryFromMutations(mutations) {
     return topicListFeature?.shouldRefreshListSummaryFromMutations?.(mutations) ?? false;
+  }
+  async function refreshDeArrowForCurrentPage({
+    forceRebuild = false,
+    pullDrive = false,
+    judge = true
+  } = {}) {
+    if (!dearrowFeature) return { active: false, count: 0, judgments: [] };
+    if (!dearrowFeature.isActive()) {
+      dearrowFeature.cleanup();
+      return { active: false, count: 0, judgments: [] };
+    }
+    if (pullDrive && driveSummarySettings?.enabled && hasDriveSummaryCredentials?.()) {
+      const pullResult = await pullDeArrowStateFromDrive?.({ silent: false });
+      if (pullResult?.ok) {
+        scheduleDriveSummarySync?.("auto");
+      }
+    }
+    if (forceRebuild) {
+      dearrowFeature.cleanup();
+    }
+    return dearrowFeature.refresh({ judge });
+  }
+  function scheduleDeArrowRefresh(delay = LIST_SUMMARY_MUTATION_REFRESH_DELAY, options = {}) {
+    return dearrowFeature?.scheduleRefresh?.(delay, options);
+  }
+  function hasDeArrowButtonCoverage() {
+    return dearrowFeature?.hasButtonCoverage?.() ?? true;
+  }
+  function shouldRefreshDeArrowFromMutations(mutations) {
+    return dearrowFeature?.shouldRefreshFromMutations?.(mutations) ?? false;
   }
   function applySidebarSettings() {
     return settingsController?.applySidebarSettings?.();
@@ -14277,6 +18592,14 @@ ${historyText}` : "已有问答历史：暂无",
     sidebar.classList.toggle("open");
     updateSidebarWidth();
   }
+  function openSidebarForToastClick() {
+    const sidebar = document.getElementById("summary-sidebar");
+    return openSidebarIfClosedForToastClick({
+      enabled: toastClickAutoOpenSidebar,
+      sidebar,
+      openSidebar: () => toggleSidebar()
+    });
+  }
   function updateSidebarWidth() {
     applySidebarSettings();
   }
@@ -14286,10 +18609,12 @@ ${historyText}` : "已有问答历史：暂无",
   }
   function extractTopicIdFromElement(element) {
     if (!element) return null;
-    const linkElement = element.querySelector?.("a.title");
+    const explicitTopicId = element.getAttribute?.("data-topic-id") || element.dataset?.topicId;
+    if (explicitTopicId) return explicitTopicId;
+    const linkElement = element.querySelector?.("a.raw-topic-link, a.title, .link-top-line a, .main-link a");
     if (linkElement) {
       const href = linkElement.getAttribute("href") || "";
-      const match = href.match(/\/t\/topic\/(\d+)/);
+      const match = href.match(/\/t\/(?:[^/?#]+\/)?(\d+)(?:[/?#]|$)/);
       if (match) return match[1];
       const topicId = linkElement.getAttribute("data-topic-id");
       if (topicId) return topicId;
@@ -14301,7 +18626,7 @@ ${historyText}` : "已有问答历史：暂无",
     return null;
   }
   function scheduleAutoSummarize(topicId) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return;
     attemptAutoSummarize(normalizedTopicId);
     setTimeout(() => {
@@ -14430,9 +18755,15 @@ ${historyText}` : "已有问答历史：暂无",
         scheduleListSummaryRefresh(LIST_SUMMARY_MUTATION_REFRESH_DELAY);
         startListSummaryBootstrapWatcher({ immediate: false, resetAttempts: true });
       }
+      if (shouldRefreshDeArrowFromMutations(mutations)) {
+        scheduleDeArrowRefresh(LIST_SUMMARY_MUTATION_REFRESH_DELAY);
+      }
     });
     bodyObserver.observe(document.body, {
       childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["href", "data-topic-id", "class"],
       subtree: true
     });
     setInterval(() => {
@@ -14446,6 +18777,11 @@ ${historyText}` : "已有问答历史：暂无",
         startListSummaryBootstrapWatcher({ immediate: true, resetAttempts: false });
       } else if (!state.listPageSummaryEnabled || !isListSummaryPageUrl(currentPageUrl)) {
         clearListSummaryBootstrapWatcher();
+      }
+      if (dearrowFeature?.isActive?.() && !hasDeArrowButtonCoverage()) {
+        scheduleDeArrowRefresh(0);
+      } else if (!dearrowFeature?.isActive?.()) {
+        dearrowFeature?.cleanup?.();
       }
     }, 1e3);
   }
@@ -14488,6 +18824,12 @@ ${historyText}` : "已有问答历史：暂无",
       clearListSummaryBootstrapWatcher();
       removeTopicListSummaryButtons({ preserveExpanded: true });
     }
+    refreshDeArrowForCurrentPage({
+      forceRebuild: previousUrl !== currentPageUrl,
+      pullDrive: true
+    }).catch((error) => {
+      console.error("[LINUX DO Summary] DeArrow refresh failed:", error);
+    });
   }
   function bindSidebarHistoryButton() {
     const historyButton = document.getElementById("history-button");
@@ -14508,7 +18850,7 @@ ${historyText}` : "已有问答历史：暂无",
         setSidebarHistoryButtonActive(false);
         return;
       }
-      const currentTopicId = normalizeTopicId(document.getElementById("building")?.value || extractTopicId());
+      const currentTopicId = normalizeTopicId3(document.getElementById("building")?.value || extractTopicId());
       const originalLabel = historyButton.textContent;
       historyButton.disabled = true;
       historyButton.textContent = "⏳ 拉取中...";
@@ -14531,8 +18873,11 @@ ${historyText}` : "已有问答历史：暂无",
     });
   }
   function expandSummaryRowInList(topicId) {
-    const normalizedTopicId = normalizeTopicId(topicId);
+    const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return;
+    if (isSummaryRowExpandedInList(normalizedTopicId)) {
+      return;
+    }
     if (expandSummaryRowByTopicId(normalizedTopicId)) {
       return;
     }
@@ -14556,30 +18901,22 @@ ${historyText}` : "已有问答历史：暂无",
     expandSummaryRowInList(topicId);
   }
   function handleToastClick(topicId, toastId, toastType = "info") {
-    const normalizedTopicId = normalizeTopicId(topicId);
-    if (!normalizedTopicId) return;
-    const onTopicPage = /^\/t\/topic\/\d+/.test(window.location.pathname);
-    if (!onTopicPage) {
-      scrollToAndHighlightTopic(normalizedTopicId, toastType);
-      if (toastAutoExpand) {
-        expandSummaryRowInList(normalizedTopicId);
-      }
-      removeToast(toastId);
-      return;
-    }
-    const currentTopicId = extractTopicId();
-    if (currentTopicId === normalizedTopicId) {
-      removeToast(toastId);
-      return;
-    }
-    const recommendedElement = document.querySelector(`.topic-list-item[data-topic-id="${normalizedTopicId}"]`);
-    if (recommendedElement) {
-      scrollToAndHighlightTopic(normalizedTopicId, toastType);
-      if (toastAutoExpand) {
-        expandSummaryRowInRecommended(normalizedTopicId);
-      }
-      removeToast(toastId);
-    }
+    return handleToastClickAction({
+      topicId,
+      toastId,
+      toastType,
+      onTopicPage: /^\/t\/topic\/\d+/.test(window.location.pathname),
+      currentTopicId: extractTopicId(),
+      toastAutoExpand,
+      findRecommendedElement: (normalizedTopicId) => document.querySelector(`.topic-list-item[data-topic-id="${normalizedTopicId}"]`),
+      scrollToAndHighlightTopic,
+      expandSummaryRowInList,
+      expandSummaryRowInRecommended,
+      isSummaryRowExpanded: isSummaryRowExpandedInList,
+      scheduleToastAutoExpand: scheduleToastDeferredAction,
+      openSidebarForToastClick,
+      removeToast
+    });
   }
   var initializePromise = null;
   var bootstrapInitializationScheduled = false;
@@ -14646,6 +18983,9 @@ ${historyText}` : "已有问答历史：暂无",
       } else {
         clearListSummaryBootstrapWatcher();
       }
+      refreshDeArrowForCurrentPage({ pullDrive: true }).catch((error) => {
+        console.error("[LINUX DO Summary] Initial DeArrow refresh failed:", error);
+      });
       notifyExternalContentFilter();
       return publicApi;
     })().catch((error) => {
