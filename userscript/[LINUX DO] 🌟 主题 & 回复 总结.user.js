@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260808] v1.2.0
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260813] v1.1.3
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260808] v1.2.0
-// @update-log   [20260808] v1.2.0: 新增默认关闭的 DeArrow 标题党检测与标题改写，支持独立判断/改写模型、自定义作用 URL、状态图标、悬停临时查看原标题、重新改写与本地/Drive 同步；完善 SPA/移动布局和异步状态一致性，内容提取 429 采用 10 秒起指数退避；标题改写支持仅首帖的多模态识图，并修复图片附件元数据误判。
+// @version      [20260813] v1.1.3
+// @update-log   [20260813] v1.1.3: 收敛列表刷新事件并优化 DeArrow 状态热路径，修复长时间占用主线程导致的交互延迟。
 // @original     WhalelnColdSky
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -1126,10 +1126,26 @@ ${promptConfig.outputFormat}`;
     DEFAULT_DEARROW_SCOPE_URL,
     DEFAULT_DEARROW_TOP_SCOPE_URL
   ]);
+  var DEFAULT_DEARROW_JUDGMENT_PROMPT = [
+    "你是论坛标题质量判定器。你只能根据给定的标题判断，不得臆测帖子内容。",
+    "如果标题包含明显夸张、误导、刻意制造紧迫/恐慌，或用“震惊”“万万没想到”“这件事”等方式隐去关键信息诱导点击，标记为标题党。",
+    "普通的疑问、求助、幽默、简短或主观表达本身不等于标题党。",
+    '仅返回严格 JSON：{"results":[{"topicId":"...","verdict":true,"reason":"简短原因"}]}。',
+    "每个输入 topicId 必须恰好返回一次。"
+  ].join("\n");
+  var DEFAULT_DEARROW_REWRITE_PROMPT = [
+    "你负责根据论坛主题首帖改写标题。",
+    "新标题必须具体、中立、不夸张，直接表达首帖的实际主题。",
+    "不得补充首帖不存在的事实；保留重要的技术名称、产品名、版本号和数值。",
+    '仅返回严格 JSON：{"title":"单行新标题"}。不要返回 HTML、Markdown 或解释。'
+  ].join("\n");
   var defaultDeArrowSettings = Object.freeze({
     dearrowEnabled: false,
+    dearrowAutoRewrite: false,
     dearrowJudgmentApiIndex: 0,
     dearrowRewriteApiIndex: 0,
+    dearrowJudgmentPrompt: DEFAULT_DEARROW_JUDGMENT_PROMPT,
+    dearrowRewritePrompt: DEFAULT_DEARROW_REWRITE_PROMPT,
     dearrowScopeRules: DEFAULT_DEARROW_SCOPE_URLS
   });
   var DEARROW_STATE_FIELDS = Object.freeze({
@@ -1139,6 +1155,9 @@ ${promptConfig.outputFormat}`;
   function normalizeString(value) {
     if (value === null || value === void 0) return "";
     return String(value).trim();
+  }
+  function normalizeDeArrowPrompt(value, fallback = "") {
+    return normalizeString(value) || normalizeString(fallback);
   }
   function normalizeTopicId(value) {
     return normalizeString(value);
@@ -1237,6 +1256,7 @@ ${promptConfig.outputFormat}`;
     const legacyApiIndex = source.dearrowApiIndex;
     return {
       dearrowEnabled: source.dearrowEnabled === true,
+      dearrowAutoRewrite: source.dearrowAutoRewrite === true,
       dearrowJudgmentApiIndex: normalizeDeArrowApiIndex(
         source.dearrowJudgmentApiIndex ?? legacyApiIndex,
         apiConfigurations2
@@ -1244,6 +1264,14 @@ ${promptConfig.outputFormat}`;
       dearrowRewriteApiIndex: normalizeDeArrowApiIndex(
         source.dearrowRewriteApiIndex ?? legacyApiIndex,
         apiConfigurations2
+      ),
+      dearrowJudgmentPrompt: normalizeDeArrowPrompt(
+        source.dearrowJudgmentPrompt,
+        defaultDeArrowSettings.dearrowJudgmentPrompt
+      ),
+      dearrowRewritePrompt: normalizeDeArrowPrompt(
+        source.dearrowRewritePrompt,
+        defaultDeArrowSettings.dearrowRewritePrompt
       ),
       dearrowScopeRules: normalizeDeArrowScopeRules(source.dearrowScopeRules)
     };
@@ -2644,7 +2672,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
 
   // src/features/historyState/index.js
   var SUMMARY_HISTORY_STORAGE_KEY = "summaryHistory";
-  var SUMMARY_HISTORY_CACHE_MAX_AGE_MS = 300;
+  var SUMMARY_HISTORY_CACHE_MAX_AGE_MS = 3e4;
   function createHistoryStateFeature({
     GM_getValue: GM_getValue2,
     GM_setValue: GM_setValue2,
@@ -2664,7 +2692,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       if (force || !summaryHistoryCacheMap || cacheExpired) {
         const stored = GM_getValue2(SUMMARY_HISTORY_STORAGE_KEY, {});
         summaryHistoryCacheMap = normalizeSummaryHistoryMapForStorage(stored);
-        summaryHistoryCacheUpdatedAt = now;
+        summaryHistoryCacheUpdatedAt = Date.now();
       }
       return summaryHistoryCacheMap;
     }
@@ -2863,6 +2891,49 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     return !hasIcon && !hasExactMarkup;
   }
 
+  var CONTENT_FILTER_REFRESH_EVENT = "content-blocker:navigation";
+  var CONTENT_FILTER_REFRESH_DELAY = 120;
+  var contentFilterRefreshTimer = null;
+  var contentFilterRefreshDispatching = false;
+  function dispatchContentFilterRefreshEvent() {
+    try {
+      window.dispatchEvent(new Event(CONTENT_FILTER_REFRESH_EVENT));
+      return true;
+    } catch (error) {
+      console.warn("[LINUX DO Summary] Failed to dispatch content filter refresh event:", error);
+      return false;
+    }
+  }
+  function scheduleContentFilterRefreshEvent() {
+    if (contentFilterRefreshDispatching) return false;
+    if (contentFilterRefreshTimer !== null) {
+      clearTimeout(contentFilterRefreshTimer);
+    }
+    contentFilterRefreshTimer = setTimeout(() => {
+      contentFilterRefreshTimer = null;
+      if (contentFilterRefreshDispatching) return;
+      contentFilterRefreshDispatching = true;
+      try {
+        dispatchContentFilterRefreshEvent();
+      } finally {
+        contentFilterRefreshDispatching = false;
+      }
+    }, CONTENT_FILTER_REFRESH_DELAY);
+    return true;
+  }
+  function mutationBatchAddsTopicRows(mutations) {
+    for (const mutation of mutations || []) {
+      if (mutation?.type !== "childList" || !mutation.addedNodes?.length) continue;
+      for (const node of mutation.addedNodes) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node.matches?.(".topic-list-item") || node.querySelector?.(".topic-list-item")) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   // src/features/listPage/index.js
   var TOPIC_SUMMARY_VIEW_MODE = Object.freeze({
     SUMMARY: "summary",
@@ -2882,6 +2953,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       resolveSummaryRenderMode: resolveSummaryRenderMode2,
       setListSummaryHtml,
       applySummaryWidthSettings: applySummaryWidthSettings2,
+      getSummaryHistoryMapSnapshot: getSummaryHistoryMapSnapshot3,
       getSummaryHistory: getSummaryHistory2,
       isTopicMarkedSummarized: isTopicMarkedSummarized2,
       hasDriveSummaryCredentials: hasDriveSummaryCredentials2,
@@ -3055,19 +3127,6 @@ ${error.stack}`);
         if (!Number.isNaN(left) && left < -900) return true;
       }
       return false;
-    }
-    function notifyExternalContentFilter2() {
-      const externalTrigger = globalThis?.triggerContentFilter;
-      if (typeof externalTrigger !== "function") {
-        return false;
-      }
-      try {
-        externalTrigger.call(globalThis);
-        return true;
-      } catch (error) {
-        console.warn("[LINUX DO Summary] Failed to call external triggerContentFilter():", error);
-        return false;
-      }
     }
     function canAttemptDrivePull() {
       if (!state2.driveSummarySettings?.enabled) return false;
@@ -3598,7 +3657,6 @@ ${error.stack}`);
           scheduleListSummaryPostRenderTasks(120);
           return;
         }
-        notifyExternalContentFilter2();
         if (!document.getElementById("summary-width-style") && typeof applySummaryWidthSettings2 === "function") {
           applySummaryWidthSettings2();
         }
@@ -3631,6 +3689,7 @@ ${error.stack}`);
       const topicIdsOnPage = /* @__PURE__ */ new Set();
       let autoExpandCandidateTopicId = null;
       const topicItems = document.querySelectorAll(".topic-list-item");
+      const historyMap = typeof getSummaryHistoryMapSnapshot3 === "function" ? getSummaryHistoryMapSnapshot3() : null;
       topicItems.forEach((item) => {
         if (isSoftHidden(item)) {
           cleanupTopicListSummaryItem(item);
@@ -3653,7 +3712,7 @@ ${error.stack}`);
         existingQuestionButtons.forEach((button) => {
           if (button !== questionButton) button.remove();
         });
-        const history = getSummaryHistory2(topicId);
+        const history = historyMap ? historyMap[topicId] || [] : getSummaryHistory2(topicId);
         const hasLocalHistory = history.length > 0;
         const hasSummaryState = hasLocalHistory || isTopicMarkedSummarized2(topicId);
         const isBusy = isTopicSummaryBusy(topicId);
@@ -5559,7 +5618,9 @@ ${error.stack}`);
       normalizeAutoRetryInterval: normalizeAutoRetryInterval2,
       normalizeCurrentApiIndex: normalizeCurrentApiIndex2,
       normalizeDeArrowApiIndex: normalizeDeArrowApiIndex2,
+      normalizeDeArrowPrompt: normalizeDeArrowPrompt2,
       normalizeDeArrowScopeRules: normalizeDeArrowScopeRules2,
+      defaultDeArrowSettings: defaultDeArrowSettings2,
       validateDeArrowScopeRules: validateDeArrowScopeRules2,
       normalizeDeArrowTopicStates: normalizeDeArrowTopicStates2,
       normalizeSummaryOutputFilters: normalizeSummaryOutputFilters2,
@@ -5593,6 +5654,7 @@ ${error.stack}`);
       restoreExpandedSummaryRows,
       updateListSummaryStyles,
       refreshDeArrowForCurrentPage: refreshDeArrowForCurrentPage2,
+      cancelDeArrowAutoRewrites: cancelDeArrowAutoRewrites2,
       updateSidebarSubmitButtonState: updateSidebarSubmitButtonState2,
       uploadSummaryHistoryToDrive: uploadSummaryHistoryToDrive2,
       rebuildSummaryTopicIdsFromDrive: rebuildSummaryTopicIdsFromDrive2,
@@ -6042,11 +6104,16 @@ ${error.stack}`);
       const autoShowSummarySwitch = document.getElementById("auto-show-summary-switch");
       const listSummaryMaxLinesInput = document.getElementById("list-summary-max-lines");
       const dearrowEnabledSwitch = document.getElementById("dearrow-enabled-switch");
+      const dearrowAutoRewriteSwitch = document.getElementById("dearrow-auto-rewrite-switch");
+      const dearrowJudgmentPromptInput = document.getElementById("dearrow-judgment-prompt");
+      const dearrowRewritePromptInput = document.getElementById("dearrow-rewrite-prompt");
       const dearrowJudgmentApiSelect = document.getElementById("dearrow-judgment-api-select");
       const dearrowRewriteApiSelect = document.getElementById("dearrow-rewrite-api-select");
       const dearrowScopeRulesInput = document.getElementById("dearrow-scope-rules");
       const dearrowScopeError = document.getElementById("dearrow-scope-error");
       const saveDeArrowSettingsButton = document.getElementById("save-dearrow-settings");
+      const getDefaultDeArrowPrompt = (key) => String(defaultDeArrowSettings2?.[key] || "").trim();
+      const normalizePromptValue = (value, fallback = "") => typeof normalizeDeArrowPrompt2 === "function" ? normalizeDeArrowPrompt2(value, fallback) : String(value ?? "").trim() || String(fallback || "").trim();
       const syncAutoSummarizeSwitches = () => {
         if (newTopicAutoSummarizeCheckbox) {
           newTopicAutoSummarizeCheckbox.checked = state2.newTopicAutoSummarize;
@@ -6277,6 +6344,21 @@ ${error.stack}`);
         if (dearrowEnabledSwitch) {
           dearrowEnabledSwitch.checked = state2.dearrowEnabled === true;
         }
+        if (dearrowAutoRewriteSwitch) {
+          dearrowAutoRewriteSwitch.checked = state2.dearrowAutoRewrite === true;
+        }
+        if (dearrowJudgmentPromptInput) {
+          dearrowJudgmentPromptInput.value = normalizePromptValue(
+            state2.dearrowJudgmentPrompt,
+            getDefaultDeArrowPrompt("dearrowJudgmentPrompt")
+          );
+        }
+        if (dearrowRewritePromptInput) {
+          dearrowRewritePromptInput.value = normalizePromptValue(
+            state2.dearrowRewritePrompt,
+            getDefaultDeArrowPrompt("dearrowRewritePrompt")
+          );
+        }
         const apiList = Array.isArray(state2.apiConfigurations) ? state2.apiConfigurations : [];
         const populateDeArrowApiSelect = (select, stateKey) => {
           if (!select) return;
@@ -6302,6 +6384,24 @@ ${error.stack}`);
         }
         renderDeArrowScopeError([]);
       };
+      let dearrowSettingsRefreshTimer = null;
+      let dearrowPendingRefreshOptions = null;
+      const scheduleDeArrowSettingsRefresh = (options) => {
+        dearrowPendingRefreshOptions = {
+          forceRebuild: dearrowPendingRefreshOptions?.forceRebuild === true || options?.forceRebuild === true,
+          pullDrive: false,
+          judge: dearrowPendingRefreshOptions?.judge === true || options?.judge === true
+        };
+        if (dearrowSettingsRefreshTimer !== null) {
+          clearTimeout(dearrowSettingsRefreshTimer);
+        }
+        dearrowSettingsRefreshTimer = setTimeout(() => {
+          dearrowSettingsRefreshTimer = null;
+          const refreshOptions = dearrowPendingRefreshOptions;
+          dearrowPendingRefreshOptions = null;
+          Promise.resolve(refreshDeArrowForCurrentPage2?.(refreshOptions)).catch((error) => console.warn("[DeArrow] 应用设置失败:", error));
+        }, 120);
+      };
       const saveDeArrowSettings = ({ showToast = true } = {}) => {
         if (!dearrowEnabledSwitch || !dearrowJudgmentApiSelect || !dearrowRewriteApiSelect || !dearrowScopeRulesInput) return false;
         const rawScopeRules = dearrowScopeRulesInput.value;
@@ -6318,17 +6418,68 @@ ${error.stack}`);
           }
           return false;
         }
+        const previous = {
+          dearrowEnabled: state2.dearrowEnabled === true,
+          dearrowAutoRewrite: state2.dearrowAutoRewrite === true,
+          dearrowJudgmentPrompt: state2.dearrowJudgmentPrompt,
+          dearrowRewritePrompt: state2.dearrowRewritePrompt,
+          dearrowJudgmentApiIndex: state2.dearrowJudgmentApiIndex,
+          dearrowRewriteApiIndex: state2.dearrowRewriteApiIndex,
+          dearrowScopeRules: Array.isArray(state2.dearrowScopeRules) ? [...state2.dearrowScopeRules] : []
+        };
         const apiList = Array.isArray(state2.apiConfigurations) ? state2.apiConfigurations : [];
         state2.dearrowEnabled = dearrowEnabledSwitch.checked === true;
+        state2.dearrowAutoRewrite = dearrowAutoRewriteSwitch?.checked === true;
+        if (dearrowJudgmentPromptInput) {
+          state2.dearrowJudgmentPrompt = normalizePromptValue(
+            dearrowJudgmentPromptInput.value,
+            getDefaultDeArrowPrompt("dearrowJudgmentPrompt")
+          );
+        }
+        if (dearrowRewritePromptInput) {
+          state2.dearrowRewritePrompt = normalizePromptValue(
+            dearrowRewritePromptInput.value,
+            getDefaultDeArrowPrompt("dearrowRewritePrompt")
+          );
+        }
         state2.dearrowJudgmentApiIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(dearrowJudgmentApiSelect.value, apiList) : Math.max(0, parseInt(dearrowJudgmentApiSelect.value, 10) || 0);
         state2.dearrowRewriteApiIndex = typeof normalizeDeArrowApiIndex2 === "function" ? normalizeDeArrowApiIndex2(dearrowRewriteApiSelect.value, apiList) : Math.max(0, parseInt(dearrowRewriteApiSelect.value, 10) || 0);
         state2.dearrowScopeRules = validation.rules;
-        GM_setValue2("dearrowEnabled", state2.dearrowEnabled);
-        GM_setValue2("dearrowJudgmentApiIndex", state2.dearrowJudgmentApiIndex);
-        GM_setValue2("dearrowRewriteApiIndex", state2.dearrowRewriteApiIndex);
-        GM_setValue2("dearrowScopeRules", state2.dearrowScopeRules);
+        if (previous.dearrowEnabled !== state2.dearrowEnabled) {
+          GM_setValue2("dearrowEnabled", state2.dearrowEnabled);
+        }
+        if (previous.dearrowAutoRewrite !== state2.dearrowAutoRewrite) {
+          GM_setValue2("dearrowAutoRewrite", state2.dearrowAutoRewrite);
+        }
+        if (previous.dearrowJudgmentPrompt !== state2.dearrowJudgmentPrompt && state2.dearrowJudgmentPrompt !== void 0) {
+          GM_setValue2("dearrowJudgmentPrompt", state2.dearrowJudgmentPrompt);
+        }
+        if (previous.dearrowRewritePrompt !== state2.dearrowRewritePrompt && state2.dearrowRewritePrompt !== void 0) {
+          GM_setValue2("dearrowRewritePrompt", state2.dearrowRewritePrompt);
+        }
+        if (previous.dearrowJudgmentApiIndex !== state2.dearrowJudgmentApiIndex) {
+          GM_setValue2("dearrowJudgmentApiIndex", state2.dearrowJudgmentApiIndex);
+        }
+        if (previous.dearrowRewriteApiIndex !== state2.dearrowRewriteApiIndex) {
+          GM_setValue2("dearrowRewriteApiIndex", state2.dearrowRewriteApiIndex);
+        }
+        const scopeChanged = previous.dearrowScopeRules.join("\n") !== state2.dearrowScopeRules.join("\n");
+        if (scopeChanged) {
+          GM_setValue2("dearrowScopeRules", state2.dearrowScopeRules);
+        }
         renderDeArrowScopeError([]);
-        refreshDeArrowForCurrentPage2?.({ forceRebuild: true, pullDrive: true });
+        const activationChanged = previous.dearrowEnabled !== state2.dearrowEnabled;
+        if (previous.dearrowAutoRewrite !== state2.dearrowAutoRewrite) {
+          cancelDeArrowAutoRewrites2?.();
+        }
+        const autoRewriteEnabled = !previous.dearrowAutoRewrite && state2.dearrowAutoRewrite;
+        if (activationChanged || scopeChanged || autoRewriteEnabled) {
+          scheduleDeArrowSettingsRefresh({
+            forceRebuild: activationChanged || scopeChanged,
+            pullDrive: false,
+            judge: activationChanged || scopeChanged
+          });
+        }
         if (showToast) {
           createSettingsToast2("DeArrow 设置已保存并应用！", "success", 2400);
         }
@@ -6337,6 +6488,7 @@ ${error.stack}`);
       if (dearrowEnabledSwitch) {
         dearrowEnabledSwitch.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
       }
+      dearrowAutoRewriteSwitch?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
       dearrowJudgmentApiSelect?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
       dearrowRewriteApiSelect?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
       if (saveDeArrowSettingsButton) {
@@ -6754,6 +6906,15 @@ ${error.stack}`);
             autoShowSummaryInList: state2.autoShowSummaryInList,
             listPageSummaryMaxLines: state2.listPageSummaryMaxLines,
             dearrowEnabled: state2.dearrowEnabled === true,
+            dearrowAutoRewrite: state2.dearrowAutoRewrite === true,
+            dearrowJudgmentPrompt: normalizePromptValue(
+              state2.dearrowJudgmentPrompt,
+              getDefaultDeArrowPrompt("dearrowJudgmentPrompt")
+            ),
+            dearrowRewritePrompt: normalizePromptValue(
+              state2.dearrowRewritePrompt,
+              getDefaultDeArrowPrompt("dearrowRewritePrompt")
+            ),
             dearrowJudgmentApiIndex: state2.dearrowJudgmentApiIndex,
             dearrowRewriteApiIndex: state2.dearrowRewriteApiIndex,
             dearrowScopeRules: state2.dearrowScopeRules,
@@ -6820,6 +6981,19 @@ ${error.stack}`);
           state2.autoShowSummaryInList = importedSettings.autoShowSummaryInList !== void 0 ? importedSettings.autoShowSummaryInList : state2.autoShowSummaryInList;
           state2.listPageSummaryMaxLines = importedSettings.listPageSummaryMaxLines ?? state2.listPageSummaryMaxLines;
           state2.dearrowEnabled = importedSettings.dearrowEnabled !== void 0 ? importedSettings.dearrowEnabled === true : state2.dearrowEnabled;
+          state2.dearrowAutoRewrite = importedSettings.dearrowAutoRewrite !== void 0 ? importedSettings.dearrowAutoRewrite === true : state2.dearrowAutoRewrite === true;
+          if (importedSettings.dearrowJudgmentPrompt !== void 0) {
+            state2.dearrowJudgmentPrompt = normalizePromptValue(
+              importedSettings.dearrowJudgmentPrompt,
+              getDefaultDeArrowPrompt("dearrowJudgmentPrompt")
+            );
+          }
+          if (importedSettings.dearrowRewritePrompt !== void 0) {
+            state2.dearrowRewritePrompt = normalizePromptValue(
+              importedSettings.dearrowRewritePrompt,
+              getDefaultDeArrowPrompt("dearrowRewritePrompt")
+            );
+          }
           const importedLegacyDeArrowApiIndex = importedSettings.dearrowApiIndex;
           const importedJudgmentApiIndex = importedSettings.dearrowJudgmentApiIndex ?? importedLegacyDeArrowApiIndex ?? state2.dearrowJudgmentApiIndex;
           const importedRewriteApiIndex = importedSettings.dearrowRewriteApiIndex ?? importedLegacyDeArrowApiIndex ?? state2.dearrowRewriteApiIndex;
@@ -6865,6 +7039,13 @@ ${error.stack}`);
           GM_setValue2("autoShowSummaryInList", state2.autoShowSummaryInList);
           GM_setValue2("listPageSummaryMaxLines", state2.listPageSummaryMaxLines);
           GM_setValue2("dearrowEnabled", state2.dearrowEnabled);
+          GM_setValue2("dearrowAutoRewrite", state2.dearrowAutoRewrite);
+          if (state2.dearrowJudgmentPrompt !== void 0) {
+            GM_setValue2("dearrowJudgmentPrompt", state2.dearrowJudgmentPrompt);
+          }
+          if (state2.dearrowRewritePrompt !== void 0) {
+            GM_setValue2("dearrowRewritePrompt", state2.dearrowRewritePrompt);
+          }
           GM_setValue2("dearrowJudgmentApiIndex", state2.dearrowJudgmentApiIndex);
           GM_setValue2("dearrowRewriteApiIndex", state2.dearrowRewriteApiIndex);
           GM_setValue2("dearrowScopeRules", state2.dearrowScopeRules);
@@ -7656,6 +7837,10 @@ ${error.stack}`);
                         <span class="tab-icon" aria-hidden="true">📋</span>
                         <span class="tab-label">话题列表</span>
                     </button>
+                    <button class="tab-button" data-tab="dearrow-settings">
+                        <span class="tab-icon" aria-hidden="true">🛡️</span>
+                        <span class="tab-label">DeArrow</span>
+                    </button>
                     <button class="tab-button active" data-tab="sidebar-settings">
                         <span class="tab-icon" aria-hidden="true">📌</span>
                         <span class="tab-label">话题侧栏</span>
@@ -7944,7 +8129,6 @@ ${error.stack}`);
                 <div class="list-summary-sub-tabs">
                     <button class="list-summary-sub-tab-button active" data-list-summary-tab="list-summary-position">位置 / 自动展开</button>
                     <button class="list-summary-sub-tab-button" data-list-summary-tab="list-summary-dimensions">高度 / 宽度</button>
-                    <button class="list-summary-sub-tab-button" data-list-summary-tab="list-summary-dearrow">DeArrow</button>
                 </div>
                 <div class="list-summary-sub-tab-panels">
                     <div class="list-summary-sub-tab-content settings-card active" id="list-summary-position">
@@ -7978,39 +8162,62 @@ ${error.stack}`);
                             <!-- 宽度设置内容将通过JavaScript动态生成 -->
                         </div>
                     </div>
-                    <div class="list-summary-sub-tab-content settings-card" id="list-summary-dearrow">
-                        <div class="switch-container">
-                            <span class="switch-label">1. 标题党自动替换（关/开）</span>
-                            <label class="switch switch-on-off">
-                                <input type="checkbox" id="dearrow-enabled-switch">
-                                <span class="slider"></span>
-                            </label>
-                            <span class="tooltip">开启后，在命中的话题列表中自动判断标题党，并显示 DeArrow 按钮。</span>
-                        </div>
-                        <hr>
-                        <label class="dearrow-setting-field">
-                            <span class="dearrow-setting-label">2. 标题判断模型（API 配置）：</span>
-                            <select id="dearrow-judgment-api-select"></select>
-                            <span class="tooltip">用于批量判断原标题是否为标题党，建议选择速度快、成本低的小模型。</span>
+                </div>
+            </div>
+            <div class="tab-content" id="dearrow-settings">
+                <div class="settings-card dearrow-settings-card">
+                    <div class="switch-container">
+                        <span class="switch-label">1. 标题党自动替换（关/开）</span>
+                        <label class="switch switch-on-off">
+                            <input type="checkbox" id="dearrow-enabled-switch">
+                            <span class="slider"></span>
                         </label>
-                        <hr>
-                        <label class="dearrow-setting-field">
-                            <span class="dearrow-setting-label">3. 标题重写模型（API 配置）：</span>
-                            <select id="dearrow-rewrite-api-select"></select>
-                            <span class="tooltip">用于读取首帖正文后生成新标题，可独立选择更适合写作的模型。</span>
-                        </label>
-                        <hr>
-                        <label class="dearrow-setting-field dearrow-scope-field">
-                            <span class="dearrow-setting-label">4. 作用范围（每行一个完整 URL）：</span>
-                            <textarea id="dearrow-scope-rules" rows="5" spellcheck="false" placeholder="https://linux.do/latest?order=created"></textarea>
-                            <span class="tooltip">默认精确匹配；可使用 * 匹配任意字符。仅接受 https://linux.do URL，URL 的 #hash 会被忽略。</span>
-                        </label>
-                        <div id="dearrow-scope-error" class="dearrow-scope-error" role="status" aria-live="polite"></div>
-                        <div class="settings-card-actions dearrow-settings-actions">
-                            <button id="save-dearrow-settings" class="custom-button btn btn-icon-text btn-primary save-button"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存并应用</span></button>
-                        </div>
-                        <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。</p>
+                        <span class="tooltip">开启后，在命中的话题列表中自动判断标题党，并显示 DeArrow 按钮。</span>
                     </div>
+                    <hr>
+                    <div class="switch-container">
+                        <span class="switch-label">2. 标题党自动重写（关/开）</span>
+                        <label class="switch switch-on-off">
+                            <input type="checkbox" id="dearrow-auto-rewrite-switch">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="tooltip">判定为标题党后自动读取首帖并重写标题；关闭时仍可点击 DeArrow 按钮手动重写。</span>
+                    </div>
+                    <hr>
+                    <label class="dearrow-setting-field dearrow-prompt-field">
+                        <span class="dearrow-setting-label">3. 标题党判断提示词：</span>
+                        <textarea id="dearrow-judgment-prompt" rows="7" spellcheck="false" placeholder="留空使用默认提示词"></textarea>
+                        <span class="tooltip">用于判断原标题是否为标题党。留空恢复默认提示词；请保留严格 JSON 返回格式。</span>
+                    </label>
+                    <hr>
+                    <label class="dearrow-setting-field dearrow-prompt-field">
+                        <span class="dearrow-setting-label">4. 标题重写提示词：</span>
+                        <textarea id="dearrow-rewrite-prompt" rows="7" spellcheck="false" placeholder="留空使用默认提示词"></textarea>
+                        <span class="tooltip">用于根据首帖重写标题。留空恢复默认提示词；请保留严格 JSON 返回格式。</span>
+                    </label>
+                    <hr>
+                    <label class="dearrow-setting-field">
+                        <span class="dearrow-setting-label">5. 标题判断模型（API 配置）：</span>
+                        <select id="dearrow-judgment-api-select"></select>
+                        <span class="tooltip">用于批量判断原标题是否为标题党，建议选择速度快、成本低的小模型。</span>
+                    </label>
+                    <hr>
+                    <label class="dearrow-setting-field">
+                        <span class="dearrow-setting-label">6. 标题重写模型（API 配置）：</span>
+                        <select id="dearrow-rewrite-api-select"></select>
+                        <span class="tooltip">用于读取首帖正文后生成新标题，可独立选择更适合写作的模型。</span>
+                    </label>
+                    <hr>
+                    <label class="dearrow-setting-field dearrow-scope-field">
+                        <span class="dearrow-setting-label">7. 作用范围（每行一个完整 URL）：</span>
+                        <textarea id="dearrow-scope-rules" rows="5" spellcheck="false" placeholder="https://linux.do/latest?order=created"></textarea>
+                        <span class="tooltip">默认精确匹配；可使用 * 匹配任意字符。仅接受 https://linux.do URL，URL 的 #hash 会被忽略。</span>
+                    </label>
+                    <div id="dearrow-scope-error" class="dearrow-scope-error" role="status" aria-live="polite"></div>
+                    <div class="settings-card-actions dearrow-settings-actions">
+                        <button id="save-dearrow-settings" class="custom-button btn btn-icon-text btn-primary save-button"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存并应用</span></button>
+                    </div>
+                    <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。</p>
                 </div>
             </div>
             <!-- 新增Toast设置页面 -->
@@ -8943,6 +9150,10 @@ ${error.stack}`);
             background-color: var(--tab-bg-list);
             --settings-card-rgb: 255, 152, 0;
         }
+        #settings-modal #dearrow-settings {
+            background-color: var(--tab-bg-list);
+            --settings-card-rgb: 255, 152, 0;
+        }
         #settings-modal #toast-settings {
             background-color: var(--tab-bg-toast);
             --settings-card-rgb: 76, 175, 80;
@@ -8966,7 +9177,6 @@ ${error.stack}`);
             padding: 18px;
             margin-bottom: 18px;
             box-shadow: none;
-            backdrop-filter: blur(3px);
             transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
         }
         #settings-modal .settings-card:last-child {
@@ -10941,7 +11151,7 @@ ${error.stack}`);
             margin-bottom: 0;
         }
 
-        #settings-modal #list-summary-dearrow .dearrow-setting-field {
+        #settings-modal #dearrow-settings .dearrow-setting-field {
             display: flex;
             flex-direction: column;
             gap: 7px;
@@ -10949,7 +11159,7 @@ ${error.stack}`);
             margin-bottom: 0;
         }
 
-        #settings-modal #list-summary-dearrow .dearrow-setting-label {
+        #settings-modal #dearrow-settings .dearrow-setting-label {
             color: var(--text-color);
             font-weight: 600;
         }
@@ -10960,6 +11170,18 @@ ${error.stack}`);
             width: 100%;
             box-sizing: border-box;
             margin-bottom: 0;
+        }
+
+        #settings-modal #dearrow-judgment-prompt,
+        #settings-modal #dearrow-rewrite-prompt {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 0;
+            min-height: 132px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.45;
         }
 
         #settings-modal #dearrow-scope-rules {
@@ -15412,6 +15634,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
 
   // src/features/dearrow/index.js
   var DEARROW_BATCH_SIZE = 20;
+  var DEARROW_AUTO_REWRITE_CONCURRENCY = 2;
   var DEARROW_BUTTON_CLASS = "topic-dearrow-button";
   var DEARROW_ICON_SVG = `<svg class="topic-dearrow-icon" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
     <path fill="#1213BD" d="M36 18.302c0 4.981-2.46 9.198-5.655 12.462s-7.323 5.152-12.199 5.152-9.764-1.112-12.959-4.376S0 23.283 0 18.302s2.574-9.38 5.769-12.644S13.271 0 18.146 0s9.394 2.178 12.589 5.442C33.931 8.706 36 13.322 36 18.302z" />
@@ -15526,7 +15749,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     });
     return results;
   }
-  function buildDeArrowJudgmentMessages(topics) {
+  function buildDeArrowJudgmentMessages(topics, prompt = defaultDeArrowSettings.dearrowJudgmentPrompt) {
     const normalizedTopics = Array.isArray(topics) ? topics.slice(0, DEARROW_BATCH_SIZE).map((topic) => ({
       topicId: normalizeTopicId2(topic?.topicId),
       title: normalizeString2(topic?.originalTitle ?? topic?.title)
@@ -15534,13 +15757,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     return [
       {
         role: "system",
-        content: [
-          "你是论坛标题质量判定器。你只能根据给定的标题判断，不得臆测帖子内容。",
-          "如果标题包含明显夸张、误导、刻意制造紧迫/恐慌，或用“震惊”“万万没想到”“这件事”等方式隐去关键信息诱导点击，标记为标题党。",
-          "普通的疑问、求助、幽默、简短或主观表达本身不等于标题党。",
-          '仅返回严格 JSON：{"results":[{"topicId":"...","verdict":true,"reason":"简短原因"}]}。',
-          "每个输入 topicId 必须恰好返回一次。"
-        ].join("\n")
+        content: normalizeString2(prompt) || defaultDeArrowSettings.dearrowJudgmentPrompt
       },
       {
         role: "user",
@@ -15672,18 +15889,20 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       skippedImages
     };
   }
-  function buildDeArrowRewriteMessages({ originalTitle, content, imageInputs = [] }) {
+  function buildDeArrowRewriteMessages({
+    originalTitle,
+    content,
+    imageInputs = [],
+    prompt = defaultDeArrowSettings.dearrowRewritePrompt
+  }) {
     const attachedImages = Array.isArray(imageInputs) ? imageInputs : [];
     const hasAttachedImages = attachedImages.length > 0;
     return [
       {
         role: "system",
         content: [
-          "你负责根据论坛主题首帖改写标题。",
-          "新标题必须具体、中立、不夸张，直接表达首帖的实际主题。",
-          "不得补充首帖不存在的事实；保留重要的技术名称、产品名、版本号和数值。",
-          hasAttachedImages ? "用户消息附有仅来自首帖的图片；必须结合图片视觉内容与 [图片#] 占位信息改写标题。" : "",
-          '仅返回严格 JSON：{"title":"单行新标题"}。不要返回 HTML、Markdown 或解释。'
+          normalizeString2(prompt) || defaultDeArrowSettings.dearrowRewritePrompt,
+          hasAttachedImages ? "用户消息附有仅来自首帖的图片；必须结合图片视觉内容与 [图片#] 占位信息改写标题。" : ""
         ].filter(Boolean).join("\n")
       },
       {
@@ -15809,6 +16028,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     const judgmentOwnerByTopic = /* @__PURE__ */ new Map();
     const rewriteInFlight = /* @__PURE__ */ new Map();
     const rewriteOwnerByTopic = /* @__PURE__ */ new Map();
+    const autoRewriteQueue = /* @__PURE__ */ new Map();
+    let autoRewriteActiveCount = 0;
+    let rewriteContextGeneration = 0;
+    let autoRewriteGeneration = 0;
     const runtimeErrors = /* @__PURE__ */ new Map();
     let visibleDescriptors = [];
     const originalTitlePreviews = /* @__PURE__ */ new Map();
@@ -15831,6 +16054,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       if (typeof state2.currentPageUrl === "string") return state2.currentPageUrl;
       return String(globalThis.location?.href || "");
     }
+    function getLiveUrl() {
+      if (typeof deps.getLiveUrl === "function") return String(deps.getLiveUrl() || "");
+      return String(globalThis.location?.href || getCurrentUrl());
+    }
     function isActive(url = getCurrentUrl()) {
       const config = getConfig();
       return config.dearrowEnabled && isDeArrowScopeUrl(url, config.dearrowScopeRules);
@@ -15838,7 +16065,9 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     function getTopicStates() {
       const topicStatesGetter = deps.getTopicStates ?? deps.getDeArrowTopicStates;
       const raw = typeof topicStatesGetter === "function" ? topicStatesGetter() : state2.dearrowTopicStates ?? internalTopicStates;
-      internalTopicStates = normalizeDeArrowTopicStates(raw);
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        internalTopicStates = raw;
+      }
       return internalTopicStates;
     }
     function notifyAsyncFailure(result, label) {
@@ -15848,10 +16077,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       });
     }
     function setTopicStates(nextStates, meta = {}) {
-      internalTopicStates = normalizeDeArrowTopicStates(nextStates);
+      internalTopicStates = nextStates && typeof nextStates === "object" && !Array.isArray(nextStates) ? nextStates : {};
       const topicStatesSetter = deps.setTopicStates ?? deps.setDeArrowTopicStates;
       if (typeof topicStatesSetter === "function") {
-        notifyAsyncFailure(topicStatesSetter(internalTopicStates, meta), "保存状态失败");
+        notifyAsyncFailure(topicStatesSetter(internalTopicStates, { ...meta, normalized: true }), "保存状态失败");
       } else {
         state2.dearrowTopicStates = internalTopicStates;
       }
@@ -15969,6 +16198,87 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       if (stored.verdict === true) return { name: "clickbait", stored };
       if (stored.verdict === false) return { name: "neutral", stored };
       return { name: "unjudged", stored };
+    }
+    function getCurrentRewritePromise(topicId, key) {
+      const promise = rewriteInFlight.get(key);
+      const owner = rewriteOwnerByTopic.get(topicId);
+      return promise && owner?.key === key && isRewriteOperationCurrent(owner) ? promise : null;
+    }
+    function drainAutoRewriteQueue() {
+      if (destroyed || !isActive() || !getConfig().dearrowAutoRewrite) {
+        autoRewriteQueue.clear();
+        return;
+      }
+      while (autoRewriteActiveCount < DEARROW_AUTO_REWRITE_CONCURRENCY && autoRewriteQueue.size > 0) {
+        const [key, queuedTopic] = autoRewriteQueue.entries().next().value;
+        autoRewriteQueue.delete(key);
+        const stored = getTopicStates()[queuedTopic.topicId];
+        if (stored?.originalTitle !== queuedTopic.originalTitle || stored.verdict !== true || normalizeString2(stored.rewrittenTitle) || getCurrentRewritePromise(queuedTopic.topicId, key)) {
+          continue;
+        }
+        if (queuedTopic.generation !== rewriteContextGeneration || queuedTopic.autoGeneration !== autoRewriteGeneration) continue;
+        autoRewriteActiveCount += 1;
+        let rewriteTask;
+        try {
+          rewriteTask = rewriteTopic(queuedTopic.topicId, {
+            originalTitle: queuedTopic.originalTitle,
+            automatic: true,
+            generation: queuedTopic.generation,
+            autoGeneration: queuedTopic.autoGeneration
+          });
+        } catch (error) {
+          rewriteTask = Promise.reject(error);
+        }
+        Promise.resolve(rewriteTask).catch(() => {
+        }).finally(() => {
+          autoRewriteActiveCount = Math.max(0, autoRewriteActiveCount - 1);
+          drainAutoRewriteQueue();
+        });
+      }
+    }
+    function invalidateRewriteContext() {
+      rewriteContextGeneration += 1;
+      autoRewriteGeneration += 1;
+      autoRewriteQueue.clear();
+      const staleError = createStaleOperationError("页面已切换，已忽略过期判断");
+      judgmentQueue.forEach((entry) => finalizeJudgmentEntry(entry, "reject", staleError));
+      judgmentQueue.clear();
+    }
+    function cancelAutoRewrites() {
+      autoRewriteGeneration += 1;
+      autoRewriteQueue.clear();
+    }
+    function maybeAutoRewriteTopic(topic) {
+      const config = getConfig();
+      if (!config.dearrowAutoRewrite || !isActive()) return null;
+      const topicId = normalizeTopicId2(topic?.topicId);
+      const originalTitle = normalizeString2(topic?.originalTitle ?? topic?.title);
+      if (!topicId || !originalTitle) return null;
+      const stored = getTopicStates()[topicId];
+      if (stored?.originalTitle !== originalTitle || stored.verdict !== true || normalizeString2(stored.rewrittenTitle)) {
+        return null;
+      }
+      const key = makeKey(topicId, originalTitle);
+      const currentRewritePromise = getCurrentRewritePromise(topicId, key);
+      if (currentRewritePromise) return currentRewritePromise;
+      if (autoRewriteQueue.has(key)) return autoRewriteQueue.get(key);
+      const currentError = getCurrentRuntimeError(key, topicId, originalTitle);
+      if (currentError?.kind === "rewrite") return null;
+      const queuedTopic = {
+        topicId,
+        originalTitle,
+        generation: rewriteContextGeneration,
+        autoGeneration: autoRewriteGeneration
+      };
+      autoRewriteQueue.set(key, queuedTopic);
+      drainAutoRewriteQueue();
+      return queuedTopic;
+    }
+    function scheduleAutoRewritesForVisible() {
+      if (!getConfig().dearrowAutoRewrite || !isActive()) return;
+      visibleDescriptors.forEach((descriptor) => {
+        maybeAutoRewriteTopic(descriptor);
+      });
     }
     function getOperationView(topicId, key) {
       const rewriteOperation = rewriteOwnerByTopic.get(normalizeTopicId2(topicId));
@@ -16339,7 +16649,6 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       button.addEventListener?.("mouseleave", () => setButtonInteraction(button, item, "hover", false));
       button.addEventListener?.("focus", () => setButtonInteraction(button, item, "focus", true));
       button.addEventListener?.("blur", () => setButtonInteraction(button, item, "focus", false));
-      if (!mountButton(item, button)) return null;
       return button;
     }
     function isSoftHidden(item) {
@@ -16417,7 +16726,6 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         });
         if (!button) button = createButton(item, topicId);
         if (!button) return;
-        mountButton(item, button);
         const originalTitle = resolveDescriptorOriginalTitle(topicId, accessor, button);
         if (!originalTitle) {
           cleanupItem(item);
@@ -16431,14 +16739,17 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         } else {
           item.classList?.remove?.("has-summary-button");
         }
-        descriptors.push({
+        const descriptor = {
           item,
           button,
           accessor,
           topicId,
           originalTitle,
           key: makeKey(topicId, originalTitle)
-        });
+        };
+        renderStoredState(descriptor);
+        if (!mountButton(item, button)) return;
+        descriptors.push(descriptor);
       });
       const currentButtons = new Set(descriptors.map((descriptor) => descriptor.button));
       originalTitlePreviews.forEach((_preview, button) => {
@@ -16459,6 +16770,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       }
     }
     function cleanup() {
+      invalidateRewriteContext();
       originalTitlePreviews.forEach((_preview, button) => {
         endOriginalTitlePreview(button, "", { force: true, restore: false });
       });
@@ -16540,7 +16852,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       return true;
     }
     function isJudgmentEntryCurrent(entry) {
-      if (destroyed || !entry || entry.settled || judgmentOwnerByTopic.get(entry.topic.topicId) !== entry || !isOperationOriginalStillCurrent(entry.topic.topicId, entry.topic.originalTitle)) {
+      if (destroyed || !entry || entry.settled || !isActive() || entry.generation !== rewriteContextGeneration || entry.sourceUrl !== getLiveUrl() || judgmentOwnerByTopic.get(entry.topic.topicId) !== entry || !isOperationOriginalStillCurrent(entry.topic.topicId, entry.topic.originalTitle)) {
         return false;
       }
       return getSemanticBundleFingerprint(
@@ -16560,7 +16872,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       const currentApi = resolveApiForPurpose("judgment");
       if (!currentApi) throw new Error("DeArrow 没有可用的标题判断 API 配置");
       const response = await callCompletion(
-        buildDeArrowJudgmentMessages(topics),
+        buildDeArrowJudgmentMessages(topics, getConfig().dearrowJudgmentPrompt),
         "dearrow-judgment",
         currentApi
       );
@@ -16604,6 +16916,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         runtimeErrors.delete(entry.key);
         finalizeJudgmentEntry(entry, "resolve", value);
         renderKey(entry.key);
+        maybeAutoRewriteTopic(entry.topic);
       });
       missing.forEach((entry) => {
         const error = new Error(`DeArrow 判定结果缺少话题 ${entry.topic.topicId}`);
@@ -16673,7 +16986,17 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         return Promise.resolve(stored);
       }
       const existingPromise = judgmentInFlight.get(key);
-      if (existingPromise) return existingPromise;
+      if (existingPromise) {
+        const existingEntry = judgmentOwnerByTopic.get(topicId);
+        if (existingEntry?.key === key && isJudgmentEntryCurrent(existingEntry)) {
+          return existingPromise;
+        }
+        if (existingEntry?.key === key) {
+          finalizeJudgmentEntry(existingEntry, "reject", createStaleOperationError("页面或标题已变更，已忽略过期判断"));
+        } else {
+          judgmentInFlight.delete(key);
+        }
+      }
       const previousError = getCurrentRuntimeError(key, topicId, originalTitle);
       if (previousError && options.retryErrors !== true) {
         return Promise.reject(new Error(previousError.message));
@@ -16684,6 +17007,8 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         key,
         topic: { topicId, originalTitle },
         deferred,
+        generation: rewriteContextGeneration,
+        sourceUrl: getLiveUrl(),
         baselineFingerprint: getSemanticBundleFingerprint(topicId, originalTitle, "judgment"),
         settled: false
       };
@@ -16806,7 +17131,8 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         buildDeArrowRewriteMessages({
           originalTitle,
           content: rewriteContent,
-          imageInputs
+          imageInputs,
+          prompt: operation.rewritePrompt
         }),
         "dearrow-rewrite",
         currentApi
@@ -16846,6 +17172,12 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       if (!operation || destroyed || rewriteOwnerByTopic.get(operation.topicId) !== operation || !isOperationOriginalStillCurrent(operation.topicId, operation.originalTitle)) {
         return false;
       }
+      if (operation.generation !== rewriteContextGeneration || operation.sourceUrl !== getLiveUrl() || !isActive()) {
+        return false;
+      }
+      if (operation.automatic && (operation.autoGeneration !== autoRewriteGeneration || !getConfig().dearrowAutoRewrite)) {
+        return false;
+      }
       return getSemanticBundleFingerprint(
         operation.topicId,
         operation.originalTitle,
@@ -16877,13 +17209,29 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         return Promise.reject(new Error("DeArrow 无法确定话题或原标题"));
       }
       const key = makeKey(topicId, originalTitle);
-      if (rewriteInFlight.has(key)) return rewriteInFlight.get(key);
+      if (options.automatic !== true) {
+        autoRewriteQueue.delete(key);
+      }
+      const existingPromise = getCurrentRewritePromise(topicId, key);
+      if (existingPromise) {
+        const existingOperation = rewriteOwnerByTopic.get(topicId);
+        if (options.automatic !== true && existingOperation) {
+          existingOperation.automatic = false;
+        }
+        return existingPromise;
+      }
+      rewriteInFlight.delete(key);
       const selectedRewriteApi = resolveApiForPurpose("rewrite");
       const operation = {
         key,
         topicId,
         originalTitle,
         currentApi: selectedRewriteApi ? { ...selectedRewriteApi } : null,
+        rewritePrompt: getConfig().dearrowRewritePrompt,
+        automatic: options.automatic === true,
+        generation: Number.isInteger(options.generation) ? options.generation : rewriteContextGeneration,
+        autoGeneration: Number.isInteger(options.autoGeneration) ? options.autoGeneration : autoRewriteGeneration,
+        sourceUrl: getLiveUrl(),
         phase: "awaiting-judgment",
         message: "",
         judgmentBaselineFingerprint: getSemanticBundleFingerprint(
@@ -16964,6 +17312,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         if (!hasCachedState) unique.set(descriptor.key, descriptor);
       });
       const judgments = options.judge === false ? [] : await judgeTopics(Array.from(unique.values()), { retryErrors: options.retryErrors === true });
+      scheduleAutoRewritesForVisible();
       return { active: true, count: visibleDescriptors.length, judgments };
     }
     function scheduleRefresh(delay = 120, options = {}) {
@@ -16977,6 +17326,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     function hasButtonCoverage() {
       if (!isActive()) return true;
       const items = Array.from(documentRef?.querySelectorAll?.(".topic-list-item") || []);
+      const topicStates = getTopicStates();
       return items.filter((item) => !isSoftHidden(item) && getTopicId(item) && getTitleAccessor(item)).every((item) => {
         const topicId = getTopicId(item);
         const accessor = getTitleAccessor(item);
@@ -17003,7 +17353,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         const rewrittenTitle = normalizeString2(button.dataset?.rewrittenTitle);
         if (!displayedTitle || !originalTitle) return false;
         const key = makeKey(topicId, originalTitle);
-        const stored = getTopicStates()[topicId];
+        const stored = topicStates[topicId];
         if (stored?.originalTitle && stored.originalTitle !== originalTitle) return false;
         if (rewriteInFlight.has(key)) {
           return displayedTitle === originalTitle || displayedTitle === rewrittenTitle;
@@ -17076,6 +17426,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       judgmentOwnerByTopic.clear();
       rewriteInFlight.clear();
       rewriteOwnerByTopic.clear();
+      autoRewriteQueue.clear();
       runtimeErrors.clear();
     }
     return {
@@ -17091,9 +17442,13 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       rewriteTopic,
       hasButtonCoverage,
       shouldRefreshFromMutations,
+      invalidateRewriteContext,
+      cancelAutoRewrites,
       getTopicStates,
       getInFlightJudgmentCount: () => judgmentInFlight.size,
-      getInFlightRewriteCount: () => rewriteInFlight.size
+      getInFlightRewriteCount: () => rewriteInFlight.size,
+      getQueuedAutoRewriteCount: () => autoRewriteQueue.size,
+      getActiveAutoRewriteCount: () => autoRewriteActiveCount
     };
   }
 
@@ -17267,8 +17622,11 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
   var listPageSummaryEnabled;
   var autoShowSummaryInList;
   var dearrowEnabled;
+  var dearrowAutoRewrite;
   var dearrowJudgmentApiIndex;
   var dearrowRewriteApiIndex;
+  var dearrowJudgmentPrompt;
+  var dearrowRewritePrompt;
   var dearrowScopeRules;
   var dearrowTopicStates;
   var toastEnabled;
@@ -17519,11 +17877,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     return syncAutoRetrySettingsFromCurrentApiConfiguration();
   }
   function getDeArrowTopicStatesSnapshot() {
-    dearrowTopicStates = normalizeDeArrowTopicStates(dearrowTopicStates);
     return dearrowTopicStates;
   }
   function setDeArrowTopicStatesSnapshot(nextStates, meta = {}) {
-    dearrowTopicStates = normalizeDeArrowTopicStates(nextStates);
+    dearrowTopicStates = meta.normalized === true && nextStates && typeof nextStates === "object" && !Array.isArray(nextStates) ? nextStates : normalizeDeArrowTopicStates(nextStates);
     gmSetValue("dearrowTopicStates", dearrowTopicStates);
     if (runtime) {
       syncRuntimeConfigValue("dearrowTopicStates", dearrowTopicStates);
@@ -17685,13 +18042,25 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     const legacyDeArrowApiIndex = gmGetValue("dearrowApiIndex", 0);
     const dearrowSettings = normalizeDeArrowSettings({
       dearrowEnabled: gmGetValue("dearrowEnabled", defaultDeArrowSettings.dearrowEnabled),
+      dearrowAutoRewrite: gmGetValue("dearrowAutoRewrite", defaultDeArrowSettings.dearrowAutoRewrite),
       dearrowJudgmentApiIndex: gmGetValue("dearrowJudgmentApiIndex", legacyDeArrowApiIndex),
       dearrowRewriteApiIndex: gmGetValue("dearrowRewriteApiIndex", legacyDeArrowApiIndex),
+      dearrowJudgmentPrompt: gmGetValue(
+        "dearrowJudgmentPrompt",
+        defaultDeArrowSettings.dearrowJudgmentPrompt
+      ),
+      dearrowRewritePrompt: gmGetValue(
+        "dearrowRewritePrompt",
+        defaultDeArrowSettings.dearrowRewritePrompt
+      ),
       dearrowScopeRules: gmGetValue("dearrowScopeRules", defaultDeArrowSettings.dearrowScopeRules)
     }, apiConfigurations);
     dearrowEnabled = dearrowSettings.dearrowEnabled;
+    dearrowAutoRewrite = dearrowSettings.dearrowAutoRewrite;
     dearrowJudgmentApiIndex = dearrowSettings.dearrowJudgmentApiIndex;
     dearrowRewriteApiIndex = dearrowSettings.dearrowRewriteApiIndex;
+    dearrowJudgmentPrompt = dearrowSettings.dearrowJudgmentPrompt;
+    dearrowRewritePrompt = dearrowSettings.dearrowRewritePrompt;
     dearrowScopeRules = dearrowSettings.dearrowScopeRules;
     gmSetValue("dearrowJudgmentApiIndex", dearrowJudgmentApiIndex);
     gmSetValue("dearrowRewriteApiIndex", dearrowRewriteApiIndex);
@@ -17728,8 +18097,11 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         listPageSummaryEnabled,
         autoShowSummaryInList,
         dearrowEnabled,
+        dearrowAutoRewrite,
         dearrowJudgmentApiIndex,
         dearrowRewriteApiIndex,
+        dearrowJudgmentPrompt,
+        dearrowRewritePrompt,
         dearrowScopeRules,
         dearrowTopicStates,
         toastEnabled,
@@ -17839,6 +18211,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       dearrowEnabled = value === true;
       syncRuntimeConfigValue("dearrowEnabled", dearrowEnabled);
     });
+    defineValue("dearrowAutoRewrite", () => dearrowAutoRewrite, (value) => {
+      dearrowAutoRewrite = value === true;
+      syncRuntimeConfigValue("dearrowAutoRewrite", dearrowAutoRewrite);
+    });
     defineValue("dearrowJudgmentApiIndex", () => dearrowJudgmentApiIndex, (value) => {
       dearrowJudgmentApiIndex = normalizeDeArrowApiIndex(value, apiConfigurations);
       syncRuntimeConfigValue("dearrowJudgmentApiIndex", dearrowJudgmentApiIndex);
@@ -17846,6 +18222,20 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     defineValue("dearrowRewriteApiIndex", () => dearrowRewriteApiIndex, (value) => {
       dearrowRewriteApiIndex = normalizeDeArrowApiIndex(value, apiConfigurations);
       syncRuntimeConfigValue("dearrowRewriteApiIndex", dearrowRewriteApiIndex);
+    });
+    defineValue("dearrowJudgmentPrompt", () => dearrowJudgmentPrompt, (value) => {
+      dearrowJudgmentPrompt = normalizeDeArrowPrompt(
+        value,
+        defaultDeArrowSettings.dearrowJudgmentPrompt
+      );
+      syncRuntimeConfigValue("dearrowJudgmentPrompt", dearrowJudgmentPrompt);
+    });
+    defineValue("dearrowRewritePrompt", () => dearrowRewritePrompt, (value) => {
+      dearrowRewritePrompt = normalizeDeArrowPrompt(
+        value,
+        defaultDeArrowSettings.dearrowRewritePrompt
+      );
+      syncRuntimeConfigValue("dearrowRewritePrompt", dearrowRewritePrompt);
     });
     defineValue("dearrowScopeRules", () => dearrowScopeRules, (value) => {
       dearrowScopeRules = normalizeDeArrowScopeRules(value);
@@ -18137,6 +18527,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       resolveSummaryRenderMode,
       setListSummaryHtml: (...args) => updateSummaryHtml(...args),
       applySummaryWidthSettings: (...args) => settingsController?.applySummaryWidthSettings?.(...args),
+      getSummaryHistoryMapSnapshot,
       getSummaryHistory,
       isTopicMarkedSummarized,
       hasDriveSummaryCredentials,
@@ -18158,12 +18549,16 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       state,
       getConfig: () => ({
         dearrowEnabled,
+        dearrowAutoRewrite,
         dearrowJudgmentApiIndex,
         dearrowRewriteApiIndex,
+        dearrowJudgmentPrompt,
+        dearrowRewritePrompt,
         dearrowScopeRules,
         apiConfigurations
       }),
       getCurrentUrl: () => currentPageUrl,
+      getLiveUrl: () => window.location.href,
       getApiConfigurations: () => apiConfigurations,
       extractTopicIdFromElement,
       requestCompletion: ({ currentApi, messages }) => requestChatCompletion({
@@ -18238,6 +18633,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       restoreExpandedSummaryRows: (...args) => topicListFeature?.restoreExpandedSummaryRows?.(...args),
       updateListSummaryStyles: (...args) => topicListFeature?.updateListSummaryStyles?.(...args),
       refreshDeArrowForCurrentPage,
+      cancelDeArrowAutoRewrites: () => dearrowFeature?.cancelAutoRewrites?.(),
       updateSidebarSubmitButtonState: (...args) => topicSummaryFeature?.updateSidebarSubmitButtonState?.(...args),
       uploadSummaryHistoryToDrive,
       uploadDeArrowStateToDrive,
@@ -18354,19 +18750,6 @@ ${historyText}` : "已有问答历史：暂无",
       renderMode: "markdown"
     });
     return nextHistory[0];
-  }
-  function notifyExternalContentFilter() {
-    const externalTrigger = globalThis?.triggerContentFilter;
-    if (typeof externalTrigger !== "function") {
-      return false;
-    }
-    try {
-      externalTrigger.call(globalThis);
-      return true;
-    } catch (error) {
-      console.warn("[LINUX DO Summary] Failed to call external triggerContentFilter():", error);
-      return false;
-    }
   }
   function setTopicTitle(topicId, title) {
     const normalizedTopicId = normalizeTopicIdForTitle(topicId);
@@ -18635,8 +19018,8 @@ ${historyText}` : "已有问答历史：暂无",
   }
   var TOPIC_PAGE_URL_REGEX = /^https:\/\/linux\.do\/t\/topic\/\d+/;
   var LIST_SUMMARY_PAGE_URL_REGEX = /^https:\/\/linux\.do\/(?:$|[?#]|latest(?:[/?#]|$)|new(?:[/?#]|$)|unread(?:[/?#]|$)|unseen(?:[/?#]|$)|bookmarks(?:[/?#]|$)|categories(?:[/?#]|$)|c\/|tags\/|u\/|search(?:[/?#]|$)|top(?:[/?#]|$))/;
-  var LIST_SUMMARY_BOOTSTRAP_MAX_ATTEMPTS = 45;
-  var LIST_SUMMARY_BOOTSTRAP_INTERVAL = 250;
+  var LIST_SUMMARY_BOOTSTRAP_MAX_ATTEMPTS = 12;
+  var LIST_SUMMARY_BOOTSTRAP_INTERVAL = 500;
   var LIST_SUMMARY_MUTATION_REFRESH_DELAY = 120;
   var listSummaryBootstrapTimer = null;
   var listSummaryBootstrapAttempt = 0;
@@ -18735,6 +19118,7 @@ ${historyText}` : "已有问答历史：暂无",
   }
   var urlChangeMonitorStarted = false;
   function queueUrlChangeHandling(previousUrl) {
+    dearrowFeature?.invalidateRewriteContext?.();
     Promise.resolve(handleUrlChange(previousUrl)).catch((error) => {
       console.error("[LINUX DO Summary] URL change handling failed:", error);
     });
@@ -18744,7 +19128,10 @@ ${historyText}` : "已有问答历史：暂无",
       return;
     }
     urlChangeMonitorStarted = true;
-    const bodyObserver = new MutationObserver((mutations) => {
+    const pageObserver = new MutationObserver((mutations) => {
+      if (isListSummaryPageUrl(window.location.href) && mutationBatchAddsTopicRows(mutations)) {
+        scheduleContentFilterRefreshEvent();
+      }
       if (window.location.href !== currentPageUrl) {
         const previousUrl = currentPageUrl;
         state.currentPageUrl = window.location.href;
@@ -18759,31 +19146,23 @@ ${historyText}` : "已有问答历史：暂无",
         scheduleDeArrowRefresh(LIST_SUMMARY_MUTATION_REFRESH_DELAY);
       }
     });
-    bodyObserver.observe(document.body, {
+    const observerRoot = document.querySelector("#main-outlet") || document.body;
+    pageObserver.observe(observerRoot, {
       childList: true,
       characterData: true,
       attributes: true,
       attributeFilter: ["href", "data-topic-id", "class"],
       subtree: true
     });
-    setInterval(() => {
+    const checkForUrlChange = () => {
       if (window.location.href !== currentPageUrl) {
         const previousUrl = currentPageUrl;
         state.currentPageUrl = window.location.href;
         queueUrlChangeHandling(previousUrl);
-        return;
       }
-      if (state.listPageSummaryEnabled && isListSummaryPageUrl(currentPageUrl) && !hasListSummaryButtonsCoverage()) {
-        startListSummaryBootstrapWatcher({ immediate: true, resetAttempts: false });
-      } else if (!state.listPageSummaryEnabled || !isListSummaryPageUrl(currentPageUrl)) {
-        clearListSummaryBootstrapWatcher();
-      }
-      if (dearrowFeature?.isActive?.() && !hasDeArrowButtonCoverage()) {
-        scheduleDeArrowRefresh(0);
-      } else if (!dearrowFeature?.isActive?.()) {
-        dearrowFeature?.cleanup?.();
-      }
-    }, 1e3);
+    };
+    window.addEventListener("popstate", checkForUrlChange, { passive: true });
+    window.addEventListener("pageshow", checkForUrlChange, { passive: true });
   }
   async function handleUrlChange(previousUrl) {
     const sidebar = document.getElementById("summary-sidebar");
@@ -18824,6 +19203,7 @@ ${historyText}` : "已有问答历史：暂无",
       clearListSummaryBootstrapWatcher();
       removeTopicListSummaryButtons({ preserveExpanded: true });
     }
+    scheduleContentFilterRefreshEvent();
     refreshDeArrowForCurrentPage({
       forceRebuild: previousUrl !== currentPageUrl,
       pullDrive: true
@@ -18986,7 +19366,7 @@ ${historyText}` : "已有问答历史：暂无",
       refreshDeArrowForCurrentPage({ pullDrive: true }).catch((error) => {
         console.error("[LINUX DO Summary] Initial DeArrow refresh failed:", error);
       });
-      notifyExternalContentFilter();
+      scheduleContentFilterRefreshEvent();
       return publicApi;
     })().catch((error) => {
       initializePromise = null;
