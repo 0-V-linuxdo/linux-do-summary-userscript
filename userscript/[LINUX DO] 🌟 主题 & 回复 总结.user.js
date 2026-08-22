@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260813] v1.1.3
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260822] v1.1.4
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260813] v1.1.3
-// @update-log   [20260813] v1.1.3: 收敛列表刷新事件并优化 DeArrow 状态热路径，修复长时间占用主线程导致的交互延迟。
+// @version      [20260822] v1.1.4
+// @update-log   [20260822] v1.1.4: 在话题列表「位置 / 自动展开」面板中显示已总结数量、历史条数、当前页面与同步状态等额外信息。
 // @original     WhalelnColdSky
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -5667,6 +5667,59 @@ ${error.stack}`);
     } = deps;
     let persistListSummarySettingsHandler = null;
     let importExportFeatureController = null;
+    const TOPIC_PAGE_URL_HINT = /\/t\/(?:topic\/)?[^/]+\/\d+/;
+    function formatLatestSummaryTime(value) {
+      if (!value) return "暂无";
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return "暂无";
+      return date.toLocaleString();
+    }
+    function collectListSummaryExtraInfo() {
+      const historyMap = typeof getSummaryHistoryMap === "function" ? getSummaryHistoryMap() : {};
+      const historyValues = historyMap && typeof historyMap === "object" ? Object.values(historyMap) : [];
+      let historyCount = 0;
+      let latestTimestamp = 0;
+      historyValues.forEach((list) => {
+        if (!Array.isArray(list)) return;
+        historyCount += list.length;
+        list.forEach((item) => {
+          const ts = Date.parse(item?.timestamp || "");
+          if (!Number.isNaN(ts) && ts > latestTimestamp) latestTimestamp = ts;
+        });
+      });
+      const summarizedCount = state2.summaryTopicIds instanceof Set ? state2.summaryTopicIds.size : Array.isArray(state2.summaryTopicIds) ? state2.summaryTopicIds.length : 0;
+      const currentUrl = String(state2.currentPageUrl || window.location.href || "");
+      const onListPage = typeof isListSummaryPageUrl2 === "function" ? isListSummaryPageUrl2(currentUrl) : false;
+      const onTopicPage = TOPIC_PAGE_URL_HINT.test(currentUrl);
+      const pageType = onListPage ? "列表页" : onTopicPage ? "话题页" : "其他页面";
+      const enabled = state2.listPageSummaryEnabled === true;
+      const listStatus = enabled ? onListPage ? "已开启 · 本页生效" : "已开启 · 本页不显示按钮" : "已关闭";
+      const driveSettings = typeof getDriveSummarySettings === "function" ? getDriveSummarySettings() : null;
+      const driveStatus = driveSettings?.enabled === true ? "已开启" : "未开启";
+      return {
+        summarizedCount,
+        historyCount,
+        latestSummary: formatLatestSummaryTime(latestTimestamp || 0),
+        pageType,
+        listStatus,
+        driveStatus
+      };
+    }
+    function updateListSummaryExtraInfo() {
+      const root = document.getElementById("list-summary-extra-info");
+      if (!root) return;
+      const info = collectListSummaryExtraInfo();
+      const setValue = (key, text) => {
+        const target = root.querySelector(`[data-extra-info="${key}"]`);
+        if (target) target.textContent = text;
+      };
+      setValue("summarized-count", `${info.summarizedCount} 个`);
+      setValue("history-count", `${info.historyCount} 条`);
+      setValue("latest-summary", info.latestSummary);
+      setValue("page-type", info.pageType);
+      setValue("list-status", info.listStatus);
+      setValue("drive-status", info.driveStatus);
+    }
     let updatePromptSelect = () => {
     };
     let updateQuestionPresetSelect = () => {
@@ -5923,10 +5976,12 @@ ${error.stack}`);
       updateSummaryWidthOffset();
       updateAdjustmentPrompts2();
       applyTabsCollapsedState(state2.settingsTabsCollapsed);
+      updateListSummaryExtraInfo();
       requestAnimationFrame(() => {
         syncUIWithStoredSettings2();
         updateAdjustmentPrompts2();
         updateSidebarPreview();
+        updateListSummaryExtraInfo();
       });
     }
     function initializeSettingsModal2() {
@@ -6149,6 +6204,9 @@ ${error.stack}`);
             const targetContent = document.getElementById(tabId);
             if (targetContent) targetContent.classList.add("active");
             syncMobileTabSelectValue();
+            if (tabId === "list-summary-settings") {
+              updateListSummaryExtraInfo();
+            }
           });
         });
       }
@@ -6212,6 +6270,9 @@ ${error.stack}`);
             button.classList.add("active");
             const targetContent = document.getElementById(targetId);
             if (targetContent) targetContent.classList.add("active");
+            if (targetId === "list-summary-position") {
+              updateListSummaryExtraInfo();
+            }
           });
         });
       }
@@ -6328,6 +6389,7 @@ ${error.stack}`);
           if (showToast) {
             createSettingsToast2("列表页总结设置已自动保存！", "success", 2200);
           }
+          updateListSummaryExtraInfo();
         };
         persistListSummarySettingsHandler = autoSaveListSummarySettings;
         listSummaryEnabledSwitch.addEventListener("change", () => autoSaveListSummarySettings());
@@ -8149,6 +8211,37 @@ ${error.stack}`);
                             </label>
                             <span class="tooltip">话题有历史总结时是否自动展开？</span>
                         </div>
+                        <hr>
+                        <div class="list-summary-extra-info" id="list-summary-extra-info">
+                            <span class="switch-label">3. 本地数据概览</span>
+                            <div class="list-summary-extra-grid">
+                                <div class="list-summary-extra-row">
+                                    <span class="list-summary-extra-key">已总结话题</span>
+                                    <span class="list-summary-extra-value" data-extra-info="summarized-count">—</span>
+                                </div>
+                                <div class="list-summary-extra-row">
+                                    <span class="list-summary-extra-key">历史记录</span>
+                                    <span class="list-summary-extra-value" data-extra-info="history-count">—</span>
+                                </div>
+                                <div class="list-summary-extra-row">
+                                    <span class="list-summary-extra-key">最近总结</span>
+                                    <span class="list-summary-extra-value" data-extra-info="latest-summary">—</span>
+                                </div>
+                                <div class="list-summary-extra-row">
+                                    <span class="list-summary-extra-key">当前页面</span>
+                                    <span class="list-summary-extra-value" data-extra-info="page-type">—</span>
+                                </div>
+                                <div class="list-summary-extra-row">
+                                    <span class="list-summary-extra-key">列表总结</span>
+                                    <span class="list-summary-extra-value" data-extra-info="list-status">—</span>
+                                </div>
+                                <div class="list-summary-extra-row">
+                                    <span class="list-summary-extra-key">Drive 同步</span>
+                                    <span class="list-summary-extra-value" data-extra-info="drive-status">—</span>
+                                </div>
+                            </div>
+                            <span class="tooltip">打开设置或切换本页时刷新；数据来自本地缓存，不含尚未拉取的云端记录。</span>
+                        </div>
                     </div>
                     <div class="list-summary-sub-tab-content settings-card" id="list-summary-dimensions">
                         <label class="list-summary-lines-label">
@@ -9268,6 +9361,63 @@ ${error.stack}`);
         .prompt-sub-tab-content.active,
         .toast-sub-tab-content.active {
             display: block;
+        }
+        #settings-modal .list-summary-extra-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+        #settings-modal .list-summary-extra-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: rgba(var(--settings-card-rgb, 74, 144, 226), 0.12);
+            border: 1px solid rgba(var(--settings-card-rgb, 74, 144, 226), 0.28);
+        }
+        #settings-modal .list-summary-extra-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+        #settings-modal .list-summary-extra-key {
+            color: var(--text-color);
+            opacity: 0.82;
+            flex: 0 1 auto;
+        }
+        #settings-modal .list-summary-extra-value {
+            color: var(--highlight-color);
+            font-weight: 600;
+            text-align: right;
+            word-break: break-all;
+        }
+        #settings-modal .list-summary-extra-info > .tooltip {
+            position: static;
+            display: block;
+            visibility: visible;
+            opacity: 0.72;
+            width: auto;
+            margin: 2px 0 0;
+            padding: 0;
+            left: auto;
+            bottom: auto;
+            background: transparent;
+            color: var(--text-color);
+            text-align: left;
+            font-size: 12px;
+            line-height: 1.4;
+            font-weight: normal;
+        }
+        @media (prefers-color-scheme: dark) {
+            #settings-modal .list-summary-extra-grid {
+                background: rgba(var(--settings-card-rgb, 74, 144, 226), 0.18);
+                border-color: rgba(var(--settings-card-rgb, 74, 144, 226), 0.4);
+            }
         }
         @media (max-width: 768px) {
             .api-sub-tabs,
