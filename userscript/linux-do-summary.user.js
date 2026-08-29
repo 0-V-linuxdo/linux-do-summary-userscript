@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.7
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.8
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.7
+// @version      [20260830] v1.0.8
+// @update-log   [20260830] v1.0.8: 选中 tab 沿用原填充底色，去掉 accent 混色与描边；焦点环只给键盘。
 // @update-log   [20260830] v1.0.7: 打开设置不再聚焦左上角折叠按钮；tab 选中改填充，焦点环只给键盘。
 // @update-log   [20260830] v1.0.6: 锁定设置弹窗外壳高度，切 tab 不再上下跳；面板内滚动。
 // @update-log   [20260830] v1.0.5: 设置输入字号对齐 --font-0；密钥查看改为 FormKit 风格图标钮。
@@ -19734,11 +19735,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.7 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.8 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.7";
+  const VERSION = "[20260830] v1.0.8";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19778,7 +19779,6 @@ ${historyText}` : "已有问答历史：暂无",
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
   --ld-font: var(--font-0, 1em);
   --ld-font-sm: var(--font-down-1, 0.8706em);
-  --ld-tab-active: color-mix(in srgb, var(--ld-accent) 22%, var(--ld-modal));
 }
 
 html.dark #settings-modal,
@@ -19802,7 +19802,6 @@ body[data-theme="dark"] #settings-modal {
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
   --ld-font: var(--font-0, 1em);
   --ld-font-sm: var(--font-down-1, 0.8706em);
-  --ld-tab-active: color-mix(in srgb, var(--ld-accent) 22%, var(--ld-modal));
 }
 
 #settings-modal {
@@ -19845,7 +19844,7 @@ body[data-theme="dark"] #settings-modal {
 
 #settings-modal .modal-content:focus,
 #settings-modal .modal-content:focus-visible {
-  outline: none;
+  outline: none !important;
 }
 
 #settings-modal .modal-header {
@@ -19906,13 +19905,13 @@ body[data-theme="dark"] #settings-modal {
 
 #settings-modal #close-settings:focus,
 #settings-modal .modal-header-button:focus {
-  outline: none;
-  box-shadow: none;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 #settings-modal #close-settings:focus-visible,
 #settings-modal .modal-header-button:focus-visible {
-  outline: none;
+  outline: none !important;
   box-shadow: 0 0 0 2px var(--ld-accent);
 }
 
@@ -19924,8 +19923,8 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .toast-sub-tab-button:focus,
 #settings-modal .btn:focus,
 #settings-modal .custom-button:focus {
-  outline: none;
-  box-shadow: none;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 #settings-modal .tab-button:focus-visible,
@@ -19936,7 +19935,7 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .toast-sub-tab-button:focus-visible,
 #settings-modal .btn:focus-visible,
 #settings-modal .custom-button:focus-visible {
-  outline: none;
+  outline: none !important;
   box-shadow: 0 0 0 2px var(--ld-accent);
 }
 
@@ -19946,9 +19945,8 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .list-summary-sub-tab-button.active,
 #settings-modal .prompt-sub-tab-button.active,
 #settings-modal .toast-sub-tab-button.active {
-  background: var(--ld-tab-active);
+  background: var(--tab-active-bg);
   border-color: transparent;
-  color: var(--ld-ink);
   box-shadow: none;
 }
 
