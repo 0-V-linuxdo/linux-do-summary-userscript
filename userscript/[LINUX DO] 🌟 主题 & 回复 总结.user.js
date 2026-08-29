@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.3
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.4
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.3
+// @version      [20260830] v1.0.4
+// @update-log   [20260830] v1.0.4: 恢复 4px 圆角 + 实色 accent 焦点环；token 走 --d-input-* / --ld-accent。
 // @update-log   [20260830] v1.0.3: 按钮统一 8px / 40px，与输入同套 focus-visible；保存/删除/添加/侧栏操作。
 // @update-log   [20260830] v1.0.2: 输入框统一 token、8px 圆角、半透明 focus-visible；密钥/开关/滑块/只读主题 ID。
 // @update-log   [20260830] v1.0.1: 设置弹窗高度跟随视口，面板内滚动；去掉标题冗余版本字。
@@ -8228,13 +8229,14 @@ ${error.stack}`);
             --highlight-color: #4a90e2;
             --shadow-color: rgba(0, 0, 0, 0.1);
             --input-bg: #f5f5f5;
+            --ld-accent: var(--tertiary, var(--d-input-focused-color, var(--highlight-color)));
             --ld-input-bg: var(--d-input-bg-color, var(--secondary, var(--input-bg)));
             --ld-input-fg: var(--d-input-text-color, var(--primary, var(--text-color)));
             --ld-input-border: var(--input-border-color, var(--primary-400, var(--border-color)));
-            --ld-input-radius: 8px;
-            --ld-input-focus: color-mix(in srgb, var(--highlight-color) 32%, transparent);
+            --ld-input-radius: 4px;
+            --ld-input-focus: var(--ld-accent, var(--d-input-focused-color, var(--highlight-color)));
             --ld-input-placeholder: var(--primary-medium, var(--message-color-active));
-            --ld-btn-radius: 8px;
+            --ld-btn-radius: 4px;
             --ld-btn-height: 40px;
             --button-text: #ffffff;
             --result-bg: #f9f9f9;
@@ -8590,7 +8592,7 @@ ${error.stack}`);
             min-height: var(--ld-btn-height, 40px);
             padding: 8px 12px;
             border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-btn-radius, 8px);
+            border-radius: var(--ld-btn-radius, 4px);
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
             font: inherit;
@@ -8602,11 +8604,11 @@ ${error.stack}`);
             border-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 40%, var(--ld-input-border, var(--border-color)));
             background-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 10%, var(--ld-input-bg, var(--input-bg)));
         }
+        #summary-form button:focus,
         #summary-form button:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
+            outline: none;
             border-color: var(--ld-accent, var(--highlight-color));
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         #summary-form button:disabled {
             opacity: 0.6;
@@ -8621,7 +8623,7 @@ ${error.stack}`);
             min-height: 40px;
             padding: 8px 12px;
             border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
             font: inherit;
@@ -8639,19 +8641,14 @@ ${error.stack}`);
         #summary-form input:focus,
         #settings-modal input:focus,
         #settings-modal select:focus,
-        #settings-modal textarea:focus {
-            outline: none;
-            border-color: var(--ld-accent, var(--highlight-color));
-            box-shadow: none;
-        }
+        #settings-modal textarea:focus,
         #summary-form input:focus-visible,
         #settings-modal input:focus-visible,
         #settings-modal select:focus-visible,
         #settings-modal textarea:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
-            border-color: var(--ld-accent, var(--highlight-color));
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            outline: none;
+            border-color: var(--ld-accent, var(--d-input-focused-color, var(--highlight-color)));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--d-input-focused-color, var(--highlight-color)));
         }
         #summary-form input:disabled,
         #settings-modal input:disabled,
@@ -8673,12 +8670,17 @@ ${error.stack}`);
         #settings-modal textarea[aria-invalid="true"] {
             border-color: var(--danger, var(--toast-bg-error, #e74c3c));
         }
+        #settings-modal input:user-invalid:focus,
+        #settings-modal textarea:user-invalid:focus,
+        #settings-modal input[aria-invalid="true"]:focus,
+        #settings-modal textarea[aria-invalid="true"]:focus,
         #settings-modal input:user-invalid:focus-visible,
         #settings-modal textarea:user-invalid:focus-visible,
         #settings-modal input[aria-invalid="true"]:focus-visible,
         #settings-modal textarea[aria-invalid="true"]:focus-visible {
-            outline-color: var(--danger, var(--toast-bg-error, #e74c3c));
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, var(--toast-bg-error, #e74c3c)) 28%, transparent);
+            outline: none;
+            border-color: var(--danger, var(--toast-bg-error, #e74c3c));
+            box-shadow: 0 0 0 2px var(--danger, var(--toast-bg-error, #e74c3c));
         }
         #summary-form input::placeholder,
         #settings-modal input::placeholder,
@@ -8799,7 +8801,7 @@ ${error.stack}`);
           min-height: var(--ld-btn-height, 40px);
           padding: 8px 16px;
           border: 1px solid transparent;
-          border-radius: var(--ld-btn-radius, 8px);
+          border-radius: var(--ld-btn-radius, 4px);
           font-weight: 600;
           cursor: pointer;
           transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
@@ -8809,10 +8811,10 @@ ${error.stack}`);
           align-items: center;
           justify-content: center;
         }
+        .custom-button:focus,
         .custom-button:focus-visible {
-          outline: 2px solid var(--ld-accent, var(--highlight-color));
-          outline-offset: 2px;
-          box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+          outline: none;
+          box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         .custom-button:disabled {
           opacity: 0.6;
@@ -9132,9 +9134,10 @@ ${error.stack}`);
             background-color: var(--tab-hover-bg);
             transform: translateY(-1px);
         }
+        #settings-modal .tab-button:focus,
         #settings-modal .tab-button:focus-visible {
-            outline: 2px solid var(--highlight-color);
-            outline-offset: 2px;
+            outline: none;
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         #settings-modal .tab-button.active {
             background-color: var(--tab-active-bg);
@@ -9165,7 +9168,7 @@ ${error.stack}`);
             width: 100%;
             min-height: 40px;
             padding: 8px 12px;
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
             border: 1px solid var(--ld-input-border, var(--border-color));
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
@@ -9173,14 +9176,11 @@ ${error.stack}`);
             font-size: 14px;
             transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
-        .mobile-tab-select:focus {
+        .mobile-tab-select:focus,
+        .mobile-tab-select:focus-visible {
             outline: none;
             border-color: var(--ld-accent, var(--highlight-color));
-        }
-        .mobile-tab-select:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         #toggle-tabs-button.mobile-tabs-hidden {
             display: none !important;
@@ -9320,7 +9320,7 @@ ${error.stack}`);
         .toast-sub-tab-button {
             min-height: var(--ld-btn-height, 40px);
             padding: 8px 14px;
-            border-radius: var(--ld-btn-radius, 8px);
+            border-radius: var(--ld-btn-radius, 4px);
             border: 1px solid transparent;
             background-color: var(--secondary-button-bg);
             color: var(--secondary-button-text);
@@ -9328,14 +9328,18 @@ ${error.stack}`);
             cursor: pointer;
             transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
         }
+        .api-sub-tab-button:focus,
+        .sidebar-sub-tab-button:focus,
+        .list-summary-sub-tab-button:focus,
+        .prompt-sub-tab-button:focus,
+        .toast-sub-tab-button:focus,
         .api-sub-tab-button:focus-visible,
         .sidebar-sub-tab-button:focus-visible,
         .list-summary-sub-tab-button:focus-visible,
         .prompt-sub-tab-button:focus-visible,
         .toast-sub-tab-button:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            outline: none;
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         .api-sub-tab-button:hover,
         .sidebar-sub-tab-button:hover,
@@ -9438,7 +9442,7 @@ ${error.stack}`);
             gap: 8px;
             min-height: var(--ld-btn-height, 40px);
             padding: 8px 12px;
-            border-radius: var(--ld-btn-radius, 8px);
+            border-radius: var(--ld-btn-radius, 4px);
             border: 1px solid transparent;
             font-weight: 600;
             font-size: 14px;
@@ -9462,18 +9466,18 @@ ${error.stack}`);
             background-color: var(--btn-default-active);
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
         }
+        #settings-modal .btn:focus,
         #settings-modal .btn:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
-            box-shadow: 0 0 0 3px var(--ld-input-focus, var(--btn-primary-focus));
+            outline: none;
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
+        #settings-modal .btn-success:focus,
         #settings-modal .btn-success:focus-visible {
-            outline-color: var(--btn-success-bg);
-            box-shadow: 0 0 0 3px var(--btn-success-focus);
+            box-shadow: 0 0 0 2px var(--btn-success-bg);
         }
+        #settings-modal .btn-danger:focus,
         #settings-modal .btn-danger:focus-visible {
-            outline-color: var(--btn-danger-bg);
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--btn-danger-bg) 32%, transparent);
+            box-shadow: 0 0 0 2px var(--btn-danger-bg);
         }
         #settings-modal .btn:disabled {
             opacity: 0.6;
@@ -9963,7 +9967,7 @@ ${error.stack}`);
         .auto-retry-settings input {
             padding: 8px 12px;
             border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
             transition: border-color 0.16s ease, box-shadow 0.16s ease;
@@ -9987,15 +9991,11 @@ ${error.stack}`);
             margin-left: auto;
             margin-bottom: 0;
         }
-        .auto-retry-settings input:focus {
+        .auto-retry-settings input:focus,
+        .auto-retry-settings input:focus-visible {
             outline: none;
             border-color: var(--ld-accent, var(--highlight-color));
-            box-shadow: none;
-        }
-        .auto-retry-settings input:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         @media (max-width: 768px) {
             #settings-modal .auto-retry-label {
@@ -10966,18 +10966,14 @@ ${error.stack}`);
             min-width: 0;
             padding: 8px 10px;
             border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
             background-color: var(--ld-input-bg, var(--input-bg));
             transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
 
         .topic-question-input-shell:focus-within {
             border-color: var(--ld-accent, var(--highlight-color));
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
-        }
-        .topic-question-input-shell:has(.topic-question-input:focus-visible) {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
 
         .topic-question-panel-loading .topic-question-input-shell {
@@ -11763,7 +11759,7 @@ ${error.stack}`);
             min-height: 40px;
             padding: 8px 10px;
             border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
             text-align: right;
@@ -11771,15 +11767,11 @@ ${error.stack}`);
             transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
 
-        .duration-input-container input:focus {
-            border-color: var(--ld-accent, var(--highlight-color));
-            outline: none;
-            box-shadow: none;
-        }
+        .duration-input-container input:focus,
         .duration-input-container input:focus-visible {
-            outline: 2px solid var(--ld-accent, var(--highlight-color));
-            outline-offset: 2px;
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            outline: none;
+            border-color: var(--ld-accent, var(--highlight-color));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
 
         .duration-input-container input:disabled {
@@ -11876,7 +11868,7 @@ ${error.stack}`);
             background-color: var(--secondary-button-bg);
             color: var(--secondary-button-text);
             border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
             cursor: pointer;
         }
         .toggle-key-button:hover {
@@ -11942,8 +11934,9 @@ ${error.stack}`);
             box-shadow: none;
             border-color: transparent;
         }
+        #settings-modal input[type="range"]:focus::-webkit-slider-thumb,
         #settings-modal input[type="range"]:focus-visible::-webkit-slider-thumb {
-            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         .api-key-input {
             -webkit-text-security: disc;
@@ -11955,7 +11948,7 @@ ${error.stack}`);
         #drive-settings .drive-summary-input-wrap .btn,
         #drive-settings .drive-summary-toggle {
             min-height: 40px;
-            border-radius: var(--ld-input-radius, 8px);
+            border-radius: var(--ld-input-radius, 4px);
         }
         @media (max-width: 768px) {
             #settings-modal input,
@@ -19669,11 +19662,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.3 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.4 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.3";
+  const VERSION = "[20260830] v1.0.4";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19708,8 +19701,8 @@ ${historyText}` : "已有问答历史：暂无",
   --ld-input-bg: var(--d-input-bg-color, var(--secondary, var(--input-bg)));
   --ld-input-fg: var(--d-input-text-color, var(--primary, var(--text-color)));
   --ld-input-border: var(--input-border-color, var(--primary-400, var(--ld-line)));
-  --ld-input-radius: 8px;
-  --ld-input-focus: color-mix(in srgb, var(--ld-accent) 32%, transparent);
+  --ld-input-radius: 4px;
+  --ld-input-focus: var(--ld-accent);
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
 }
 
@@ -19729,8 +19722,8 @@ body[data-theme="dark"] #settings-modal {
   --ld-input-bg: var(--d-input-bg-color, var(--secondary, var(--input-bg)));
   --ld-input-fg: var(--d-input-text-color, var(--primary, var(--text-color)));
   --ld-input-border: var(--input-border-color, var(--primary-400, var(--ld-line)));
-  --ld-input-radius: 8px;
-  --ld-input-focus: color-mix(in srgb, var(--ld-accent) 32%, transparent);
+  --ld-input-radius: 4px;
+  --ld-input-focus: var(--ld-accent);
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
 }
 
@@ -19829,12 +19822,12 @@ body[data-theme="dark"] #settings-modal {
   background: color-mix(in srgb, var(--ld-accent) 16%, transparent);
 }
 
+#settings-modal #close-settings:focus,
 #settings-modal #close-settings:focus-visible,
-#settings-modal .modal-header-button:focus-visible,
-#settings-modal .tab-button:focus-visible,
-#settings-modal .btn:focus-visible {
-  outline: 2px solid var(--ld-accent);
-  outline-offset: 2px;
+#settings-modal .modal-header-button:focus,
+#settings-modal .modal-header-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ld-accent);
 }
 
 .summary-toast {
@@ -19967,9 +19960,10 @@ body[data-theme="dark"] #settings-modal {
   background: #d95a4f;
 }
 
+.ld-polish-confirm button:focus,
 .ld-polish-confirm button:focus-visible {
-  outline: 2px solid var(--ld-accent, #64b5f6);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ld-accent, #64b5f6);
 }
 
 @media (max-width: 720px) {
