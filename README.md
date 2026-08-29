@@ -2,13 +2,13 @@
 
 给 Linux.do 用户用的浏览器脚本：在话题页和列表页一键生成结构化总结，也可以围绕当前话题继续提问、回看历史记录，并按需同步到 Google Drive。
 
-当前版本：**[20260830] v1.0.0**
+当前版本：**[20260830] v1.0.1**
 
 ## 安装
 
 1. 先安装一个用户脚本管理器，例如 Violentmonkey 或 Tampermonkey。
 2. 点击安装脚本：
-   [安装最新版 [20260830] v1.0.0](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/%5BLINUX%20DO%5D%20%F0%9F%8C%9F%20%E4%B8%BB%E9%A2%98%20%26%20%E5%9B%9E%E5%A4%8D%20%E6%80%BB%E7%BB%93.user.js)
+   [安装最新版 [20260830] v1.0.1](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/%5BLINUX%20DO%5D%20%F0%9F%8C%9F%20%E4%B8%BB%E9%A2%98%20%26%20%E5%9B%9E%E5%A4%8D%20%E6%80%BB%E7%BB%93.user.js)
 3. 打开 `https://linux.do/`，进入任意话题页。
 4. 点击侧边栏里的 `🛠️` 设置按钮，填写你的 API 地址、API Key 和模型名。
 
@@ -26,7 +26,7 @@
 - 配置导入导出：可备份或迁移 API 配置、提示词、历史数据等脚本设置。
 - Google Drive 同步：可选开启云端同步，在多设备之间同步话题总结历史。
 - Toast 通知：总结中、成功、失败、重试、Drive 拉取等状态会以通知形式提示。
-- 设置弹窗：[20260830] v1.0.0 起改为真正的对话框，支持 Esc / 点遮罩关闭、站内确认、跟随站点色板；窄屏改为底部抽屉。
+- 设置弹窗：[20260830] v1.0.1 起改为真正的对话框，支持 Esc / 点遮罩关闭、站内确认、跟随站点色板；窄屏改为底部抽屉。
 
 ## 使用方式
 
