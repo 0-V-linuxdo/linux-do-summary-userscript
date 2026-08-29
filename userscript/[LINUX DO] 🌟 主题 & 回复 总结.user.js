@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.9
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.10
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.9
+// @version      [20260830] v1.0.10
+// @update-log   [20260830] v1.0.10: DeArrow 子 tab「开关」改为「自动」。
 // @update-log   [20260830] v1.0.9: DeArrow 设置拆成开关 / 提示词 / 模型与范围 三个子 tab。
 // @update-log   [20260830] v1.0.8: 选中 tab 沿用原填充底色，去掉 accent 混色与描边；焦点环只给键盘。
 // @update-log   [20260830] v1.0.7: 打开设置不再聚焦左上角折叠按钮；tab 选中改填充，焦点环只给键盘。
@@ -8180,7 +8181,7 @@ ${error.stack}`);
             </div>
             <div class="tab-content" id="dearrow-settings">
                 <div class="dearrow-sub-tabs">
-                    <button class="dearrow-sub-tab-button active" data-dearrow-tab="dearrow-settings-switches">开关</button>
+                    <button class="dearrow-sub-tab-button active" data-dearrow-tab="dearrow-settings-switches">自动</button>
                     <button class="dearrow-sub-tab-button" data-dearrow-tab="dearrow-settings-prompts">提示词</button>
                     <button class="dearrow-sub-tab-button" data-dearrow-tab="dearrow-settings-models">模型 / 范围</button>
                 </div>
@@ -8203,7 +8204,7 @@ ${error.stack}`);
                         </label>
                         <span class="tooltip">判定为标题党后自动读取首帖并重写标题；关闭时仍可点击 DeArrow 按钮手动重写。</span>
                     </div>
-                    <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。开关会立即保存。</p>
+                    <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。以上选项会立即保存。</p>
                     </div>
                     <div class="dearrow-sub-tab-content settings-card dearrow-settings-card" id="dearrow-settings-prompts">
                     <label class="dearrow-setting-field dearrow-prompt-field">
@@ -19773,11 +19774,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.9 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.10 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.9";
+  const VERSION = "[20260830] v1.0.10";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
