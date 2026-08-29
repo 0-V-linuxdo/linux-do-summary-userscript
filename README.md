@@ -2,13 +2,13 @@
 
 给 Linux.do 用户用的浏览器脚本：在话题页和列表页一键生成结构化总结，也可以围绕当前话题继续提问、回看历史记录，并按需同步到 Google Drive。
 
-当前版本：**[20260830] v1.0.5**
+当前版本：**[20260830] v1.0.6**
 
 ## 安装
 
 1. 先安装一个用户脚本管理器，例如 Violentmonkey 或 Tampermonkey。
 2. 点击安装脚本：
-   [安装最新版 [20260830] v1.0.5](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
+   [安装最新版 [20260830] v1.0.6](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
 3. 打开 `https://linux.do/`，进入任意话题页。
 4. 点击侧边栏里的 `🛠️` 设置按钮，填写你的 API 地址、API Key 和模型名。
 
@@ -28,6 +28,7 @@
 - Toast 通知：总结中、成功、失败、重试、Drive 拉取等状态会以通知形式提示。
 - 设置弹窗：[20260830] v1.0.4 起改为真正的对话框，支持 Esc / 点遮罩关闭、站内确认、跟随站点色板；窄屏改为底部抽屉。
 - 输入与按钮：[20260830] v1.0.5 起设置输入字号对齐 Discourse `--font-0`；API Key / Drive 密钥查看改为输入框内的眼睛图标。
+- 弹窗高度：[20260830] v1.0.6 起设置弹窗外壳锁定为约 70vh（窄屏 85dvh），切换分组时窗口不再上下跳动，内容在面板内滚动。
 
 ## 使用方式
 
