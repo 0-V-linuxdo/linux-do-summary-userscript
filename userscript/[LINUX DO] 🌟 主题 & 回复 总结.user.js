@@ -1,12 +1,11 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.2
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.3
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.2
-// @update-log   [20260830] v1.0.2: 写入 @updateURL / @downloadURL，脚本管理器可检查更新。
-// @homepageURL  https://github.com/0-V-linuxdo/linux-do-summary-userscript
-// @updateURL    https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js
-// @downloadURL  https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js
+// @version      [20260830] v1.0.3
+// @update-log   [20260830] v1.0.3: 按钮统一 8px / 40px，与输入同套 focus-visible；保存/删除/添加/侧栏操作。
+// @update-log   [20260830] v1.0.2: 输入框统一 token、8px 圆角、半透明 focus-visible；密钥/开关/滑块/只读主题 ID。
+// @update-log   [20260830] v1.0.1: 设置弹窗高度跟随视口，面板内滚动；去掉标题冗余版本字。
 // @original     WhalelnColdSky
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -5130,7 +5129,7 @@ ${error.stack}`);
       const form = document.createElement("form");
       form.id = "summary-form";
       form.innerHTML = `<div class="input-container">
-                  <input type="text" id="building" name="building" placeholder="当前主题id" title="当前主题id" required>
+                  <input type="text" id="building" name="building" placeholder="当前主题id" title="当前主题 ID" readonly tabindex="-1" aria-readonly="true">
             </div>
             <div class="button-container row-1">
                   <button type="button" id="settings-button" class="custom-button" title="脚本设置" >🛠️</button>
@@ -5952,6 +5951,7 @@ ${error.stack}`);
           const lineHeight = parseInt(getComputedStyle(apiKey).lineHeight, 10) || 18;
           if (apiKeyVisible) {
             apiKey.disabled = false;
+            apiKey.classList.add("is-revealed");
             apiKey.style.webkitTextSecurity = "none";
             apiKey.style.overflowY = "hidden";
             apiKey.style.height = "auto";
@@ -5966,6 +5966,7 @@ ${error.stack}`);
             }
           } else {
             apiKey.disabled = true;
+            apiKey.classList.remove("is-revealed");
             apiKey.style.webkitTextSecurity = "disc";
             apiKey.style.overflowY = "hidden";
             apiKey.style.height = `${lineHeight}px`;
@@ -5976,7 +5977,8 @@ ${error.stack}`);
         toggleApiKeyButton.addEventListener("click", () => {
           apiKeyVisible = !apiKeyVisible;
           adjustApiKeyTextarea();
-          toggleApiKeyButton.textContent = apiKeyVisible ? "🙈" : "👁️";
+          toggleApiKeyButton.textContent = apiKeyVisible ? "隐藏" : "显示";
+          toggleApiKeyButton.setAttribute("aria-pressed", apiKeyVisible ? "true" : "false");
         });
         apiKey.addEventListener("input", () => {
           if (apiKeyVisible) adjustApiKeyTextarea();
@@ -8021,8 +8023,8 @@ ${error.stack}`);
                                     <input type="text" id="api-url" placeholder="API full path (URL)">
                                 </label>
                                 <label class="api-key-label">🔑 密钥：
-                                    <button type="button" id="toggle-api-key" class="toggle-key-button" title="显示/隐藏密钥">👁️</button>
-                                    <textarea id="api-key" rows="2" placeholder="API Key" style="-webkit-text-security: disc; resize: vertical;"></textarea>
+                                    <button type="button" id="toggle-api-key" class="toggle-key-button" title="显示/隐藏密钥" aria-pressed="false">显示</button>
+                                    <textarea id="api-key" class="api-key-input" rows="2" placeholder="API Key" autocomplete="off" spellcheck="false"></textarea>
                                 </label>
                                 <label>🤖 模型名：
                                     <input type="text" id="api-model" placeholder="API model name">
@@ -8226,6 +8228,14 @@ ${error.stack}`);
             --highlight-color: #4a90e2;
             --shadow-color: rgba(0, 0, 0, 0.1);
             --input-bg: #f5f5f5;
+            --ld-input-bg: var(--d-input-bg-color, var(--secondary, var(--input-bg)));
+            --ld-input-fg: var(--d-input-text-color, var(--primary, var(--text-color)));
+            --ld-input-border: var(--input-border-color, var(--primary-400, var(--border-color)));
+            --ld-input-radius: 8px;
+            --ld-input-focus: color-mix(in srgb, var(--highlight-color) 32%, transparent);
+            --ld-input-placeholder: var(--primary-medium, var(--message-color-active));
+            --ld-btn-radius: 8px;
+            --ld-btn-height: 40px;
             --button-text: #ffffff;
             --result-bg: #f9f9f9;
             --modal-bg: #ffffff;
@@ -8575,19 +8585,106 @@ ${error.stack}`);
             display: flex;
             gap: 5px;
         }
-        #summary-form input, #summary-form button, #settings-modal select, #settings-modal input, #settings-modal textarea {
+        #summary-form button {
             width: 100%;
-            padding: 10px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            background-color: var(--input-bg);
-            color: var(--text-color);
-            transition: all 0.3s ease;
+            min-height: var(--ld-btn-height, 40px);
+            padding: 8px 12px;
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-btn-radius, 8px);
+            background-color: var(--ld-input-bg, var(--input-bg));
+            color: var(--ld-input-fg, var(--text-color));
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
         }
-        #summary-form input:focus, #settings-modal input:focus, #settings-modal select:focus, #settings-modal textarea:focus {
+        #summary-form button:hover:not(:disabled) {
+            border-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 40%, var(--ld-input-border, var(--border-color)));
+            background-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 10%, var(--ld-input-bg, var(--input-bg)));
+        }
+        #summary-form button:focus-visible {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            border-color: var(--ld-accent, var(--highlight-color));
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+        }
+        #summary-form button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #summary-form input,
+        #settings-modal select,
+        #settings-modal input,
+        #settings-modal textarea {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 40px;
+            padding: 8px 12px;
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-input-radius, 8px);
+            background-color: var(--ld-input-bg, var(--input-bg));
+            color: var(--ld-input-fg, var(--text-color));
+            font: inherit;
+            line-height: 1.45;
+            caret-color: currentcolor;
+            color-scheme: inherit;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+        }
+        #summary-form input:hover:not(:disabled):not([readonly]),
+        #settings-modal input:hover:not(:disabled):not([readonly]),
+        #settings-modal select:hover:not(:disabled),
+        #settings-modal textarea:hover:not(:disabled) {
+            border-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 40%, var(--ld-input-border, var(--border-color)));
+        }
+        #summary-form input:focus,
+        #settings-modal input:focus,
+        #settings-modal select:focus,
+        #settings-modal textarea:focus {
             outline: none;
-            border-color: var(--highlight-color);
-            box-shadow: 0 0 0 2px var(--highlight-color);
+            border-color: var(--ld-accent, var(--highlight-color));
+            box-shadow: none;
+        }
+        #summary-form input:focus-visible,
+        #settings-modal input:focus-visible,
+        #settings-modal select:focus-visible,
+        #settings-modal textarea:focus-visible {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            border-color: var(--ld-accent, var(--highlight-color));
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+        }
+        #summary-form input:disabled,
+        #settings-modal input:disabled,
+        #settings-modal select:disabled,
+        #settings-modal textarea:disabled,
+        #summary-form input[readonly],
+        #settings-modal input[readonly],
+        #settings-modal textarea[readonly] {
+            cursor: not-allowed;
+            opacity: 1;
+            color: var(--ld-muted, var(--message-color-active));
+            background-color: color-mix(in srgb, var(--ld-input-bg, var(--input-bg)) 72%, var(--ld-line, var(--border-color)));
+            border-color: var(--ld-line, var(--border-color));
+        }
+        #settings-modal input:user-invalid,
+        #settings-modal textarea:user-invalid,
+        #settings-modal select:user-invalid,
+        #settings-modal input[aria-invalid="true"],
+        #settings-modal textarea[aria-invalid="true"] {
+            border-color: var(--danger, var(--toast-bg-error, #e74c3c));
+        }
+        #settings-modal input:user-invalid:focus-visible,
+        #settings-modal textarea:user-invalid:focus-visible,
+        #settings-modal input[aria-invalid="true"]:focus-visible,
+        #settings-modal textarea[aria-invalid="true"]:focus-visible {
+            outline-color: var(--danger, var(--toast-bg-error, #e74c3c));
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, var(--toast-bg-error, #e74c3c)) 28%, transparent);
+        }
+        #summary-form input::placeholder,
+        #settings-modal input::placeholder,
+        #settings-modal textarea::placeholder {
+            color: var(--ld-input-placeholder, var(--message-color-active));
+            opacity: 1;
         }
         /* 开关容器样式 */
         .switch-container {
@@ -8605,13 +8702,18 @@ ${error.stack}`);
         .switch {
           position: relative;
           display: inline-block;
-          width: 60px;
-          height: 34px;
+          width: 44px;
+          height: 24px;
+          flex: 0 0 auto;
         }
         .switch input {
           opacity: 0;
           width: 0;
           height: 0;
+          min-height: 0;
+          padding: 0;
+          border: 0;
+          box-shadow: none;
         }
         .slider {
           position: absolute;
@@ -8620,33 +8722,36 @@ ${error.stack}`);
           left: 0;
           right: 0;
           bottom: 0;
-          background-color: #ccc;
-          transition: .4s;
-          border-radius: 34px;
+          background-color: var(--ld-line, #ccc);
+          transition: background-color 0.16s ease, transform 0.16s ease;
+          border-radius: 999px;
         }
         .slider:before {
           position: absolute;
           content: "";
-          height: 26px;
-          width: 26px;
-          left: 4px;
-          bottom: 4px;
+          height: 18px;
+          width: 18px;
+          left: 3px;
+          bottom: 3px;
           background-color: white;
-          transition: .4s;
+          transition: transform 0.16s ease;
           border-radius: 50%;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
         }
         input:checked + .slider {
-          background-color: var(--highlight-color);
+          background-color: var(--ld-accent, var(--highlight-color));
         }
         input:checked + .slider:before {
-          transform: translateX(26px);
+          transform: translateX(20px);
         }
         .switch-left-right .slider:before {
           content: "左";
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
+          font-size: 10px;
+          font-weight: 700;
+          color: #334155;
         }
         .switch-left-right input:checked + .slider:before {
           content: "右";
@@ -8656,7 +8761,9 @@ ${error.stack}`);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
+          font-size: 10px;
+          font-weight: 700;
+          color: #334155;
         }
         .switch-on-off input:checked + .slider:before {
           content: "开";
@@ -8689,17 +8796,27 @@ ${error.stack}`);
           opacity: 1;
         }
         .custom-button {
-          padding: 10px 16px;
-          border: none;
-          border-radius: 4px;
-          font-weight: bold;
+          min-height: var(--ld-btn-height, 40px);
+          padding: 8px 16px;
+          border: 1px solid transparent;
+          border-radius: var(--ld-btn-radius, 8px);
+          font-weight: 600;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
           flex: 1;
           max-width: 120px;
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+        .custom-button:focus-visible {
+          outline: 2px solid var(--ld-accent, var(--highlight-color));
+          outline-offset: 2px;
+          box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+        }
+        .custom-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
         .save-button {
           background-color: var(--primary-button-bg);
@@ -8849,9 +8966,12 @@ ${error.stack}`);
             line-height: 1.45;
             font-weight: 500;
         }
-        #summary-form input[name="building"] {
-            background-color: var(--input-bg);
-            cursor: not-allowed;
+        #summary-form input[name="building"],
+        #summary-form #building {
+            cursor: default;
+            color: var(--ld-muted, var(--message-color-active));
+            background-color: color-mix(in srgb, var(--ld-input-bg, var(--input-bg)) 78%, var(--ld-line, var(--border-color)));
+            border-style: dashed;
         }
         @media (max-width: 768px) {
             #summary-sidebar {
@@ -9043,18 +9163,24 @@ ${error.stack}`);
         }
         .mobile-tab-select {
             width: 100%;
-            padding: 10px 12px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background-color: var(--input-bg);
-            color: var(--text-color);
+            min-height: 40px;
+            padding: 8px 12px;
+            border-radius: var(--ld-input-radius, 8px);
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            background-color: var(--ld-input-bg, var(--input-bg));
+            color: var(--ld-input-fg, var(--text-color));
+            font: inherit;
             font-size: 14px;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
         .mobile-tab-select:focus {
             outline: none;
-            border-color: var(--highlight-color);
-            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.18);
+            border-color: var(--ld-accent, var(--highlight-color));
+        }
+        .mobile-tab-select:focus-visible {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
         }
         #toggle-tabs-button.mobile-tabs-hidden {
             display: none !important;
@@ -9192,14 +9318,24 @@ ${error.stack}`);
         .list-summary-sub-tab-button,
         .prompt-sub-tab-button,
         .toast-sub-tab-button {
+            min-height: var(--ld-btn-height, 40px);
             padding: 8px 14px;
-            border-radius: 6px;
+            border-radius: var(--ld-btn-radius, 8px);
             border: 1px solid transparent;
             background-color: var(--secondary-button-bg);
             color: var(--secondary-button-text);
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+            transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .api-sub-tab-button:focus-visible,
+        .sidebar-sub-tab-button:focus-visible,
+        .list-summary-sub-tab-button:focus-visible,
+        .prompt-sub-tab-button:focus-visible,
+        .toast-sub-tab-button:focus-visible {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
         }
         .api-sub-tab-button:hover,
         .sidebar-sub-tab-button:hover,
@@ -9300,9 +9436,9 @@ ${error.stack}`);
             align-items: center;
             justify-content: center;
             gap: 8px;
-            min-height: 36px;
-            padding: 6px 12px;
-            border-radius: 6px;
+            min-height: var(--ld-btn-height, 40px);
+            padding: 8px 12px;
+            border-radius: var(--ld-btn-radius, 8px);
             border: 1px solid transparent;
             font-weight: 600;
             font-size: 14px;
@@ -9313,7 +9449,7 @@ ${error.stack}`);
             color: var(--btn-default-text);
             border-color: var(--btn-default-border);
             box-shadow: none;
-            transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
             flex: 0 0 auto;
             max-width: none;
             margin-top: 0;
@@ -9327,11 +9463,17 @@ ${error.stack}`);
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
         }
         #settings-modal .btn:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 3px var(--btn-primary-focus);
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px var(--ld-input-focus, var(--btn-primary-focus));
         }
         #settings-modal .btn-success:focus-visible {
+            outline-color: var(--btn-success-bg);
             box-shadow: 0 0 0 3px var(--btn-success-focus);
+        }
+        #settings-modal .btn-danger:focus-visible {
+            outline-color: var(--btn-danger-bg);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--btn-danger-bg) 32%, transparent);
         }
         #settings-modal .btn:disabled {
             opacity: 0.6;
@@ -9819,12 +9961,12 @@ ${error.stack}`);
         }
         /* === 新增自动重试设置样式 === */
         .auto-retry-settings input {
-            padding: 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            background-color: var(--input-bg);
-            color: var(--text-color);
-            transition: all 0.3s ease;
+            padding: 8px 12px;
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-input-radius, 8px);
+            background-color: var(--ld-input-bg, var(--input-bg));
+            color: var(--ld-input-fg, var(--text-color));
+            transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
         #settings-modal .auto-retry-label {
             display: flex;
@@ -9847,8 +9989,13 @@ ${error.stack}`);
         }
         .auto-retry-settings input:focus {
             outline: none;
-            border-color: var(--highlight-color);
-            box-shadow: 0 0 0 2px var(--highlight-color);
+            border-color: var(--ld-accent, var(--highlight-color));
+            box-shadow: none;
+        }
+        .auto-retry-settings input:focus-visible {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
         }
         @media (max-width: 768px) {
             #settings-modal .auto-retry-label {
@@ -10817,15 +10964,20 @@ ${error.stack}`);
             display: flex;
             flex-direction: column;
             min-width: 0;
-            padding: 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background-color: var(--input-bg);
-            transition: border-color 0.16s ease;
+            padding: 8px 10px;
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-input-radius, 8px);
+            background-color: var(--ld-input-bg, var(--input-bg));
+            transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
 
         .topic-question-input-shell:focus-within {
-            border-color: var(--highlight-color);
+            border-color: var(--ld-accent, var(--highlight-color));
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+        }
+        .topic-question-input-shell:has(.topic-question-input:focus-visible) {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
         }
 
         .topic-question-panel-loading .topic-question-input-shell {
@@ -10861,8 +11013,8 @@ ${error.stack}`);
         }
 
         .topic-question-input::placeholder {
-            color: var(--secondary-button-text);
-            opacity: 0.62;
+            color: var(--ld-input-placeholder, var(--message-color-active));
+            opacity: 1;
         }
 
         .topic-question-input:disabled::placeholder {
@@ -11586,17 +11738,17 @@ ${error.stack}`);
 
         /* 自动关闭开关 */
         .toast-type-row .switch {
-            width: 60px;
-            height: 34px;
+            width: 44px;
+            height: 24px;
         }
 
         .toast-type-row .switch .slider:before {
-            height: 26px;
-            width: 26px;
+            height: 18px;
+            width: 18px;
         }
 
         .toast-type-row .switch input:checked + .slider:before {
-            transform: translateX(26px);
+            transform: translateX(20px);
         }
 
         /* 持续时间输入 */
@@ -11607,20 +11759,27 @@ ${error.stack}`);
         }
 
         .duration-input-container input {
-            width: 60px;
-            padding: 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            text-align: center;
-            transition: all 0.2s;
+            width: 72px;
+            min-height: 40px;
+            padding: 8px 10px;
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-input-radius, 8px);
+            background-color: var(--ld-input-bg, var(--input-bg));
+            color: var(--ld-input-fg, var(--text-color));
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
 
         .duration-input-container input:focus {
-            border-color: var(--highlight-color);
+            border-color: var(--ld-accent, var(--highlight-color));
             outline: none;
-            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+            box-shadow: none;
+        }
+        .duration-input-container input:focus-visible {
+            outline: 2px solid var(--ld-accent, var(--highlight-color));
+            outline-offset: 2px;
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
         }
 
         .duration-input-container input:disabled {
@@ -11711,11 +11870,13 @@ ${error.stack}`);
         /* Toggle API Key button */
         .toggle-key-button {
             margin-left: 8px;
-            padding: 4px 6px;
+            min-width: 36px;
+            min-height: 36px;
+            padding: 4px 8px;
             background-color: var(--secondary-button-bg);
             color: var(--secondary-button-text);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-input-radius, 8px);
             cursor: pointer;
         }
         .toggle-key-button:hover {
@@ -11724,6 +11885,87 @@ ${error.stack}`);
         }
     `;
     style.textContent += `
+
+        /* === INPUT CONTRACT 20260830 v1.0.2 === */
+        #settings-modal input[type="number"],
+        #settings-modal .auto-retry-input,
+        #settings-modal .list-summary-lines-input,
+        #settings-modal .sidebar-dimension-number,
+        #settings-modal .number-input,
+        .duration-input-container input {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        #settings-modal input[type="number"]::-webkit-inner-spin-button,
+        #settings-modal input[type="number"]::-webkit-outer-spin-button {
+            opacity: 0.45;
+            height: 22px;
+        }
+        #settings-modal input[type="range"],
+        .width-input-container input[type="range"],
+        .sidebar-dimension-range {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            min-height: 6px;
+            padding: 0;
+            background: var(--ld-line, var(--border-color));
+            border: 0;
+            border-radius: 999px;
+            box-shadow: none;
+        }
+        #settings-modal input[type="range"]::-webkit-slider-thumb,
+        .width-input-container input[type="range"]::-webkit-slider-thumb,
+        .sidebar-dimension-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--ld-accent, var(--highlight-color));
+            border: 2px solid var(--ld-modal, var(--modal-bg, #fff));
+            box-shadow: 0 0 0 1px var(--ld-accent, var(--highlight-color));
+            cursor: pointer;
+        }
+        #settings-modal input[type="range"]::-moz-range-thumb,
+        .width-input-container input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--ld-accent, var(--highlight-color));
+            border: 2px solid var(--ld-modal, var(--modal-bg, #fff));
+            cursor: pointer;
+        }
+        #settings-modal input[type="range"]:focus,
+        #settings-modal input[type="range"]:focus-visible {
+            outline: none;
+            box-shadow: none;
+            border-color: transparent;
+        }
+        #settings-modal input[type="range"]:focus-visible::-webkit-slider-thumb {
+            box-shadow: 0 0 0 3px var(--ld-input-focus, color-mix(in srgb, var(--highlight-color) 32%, transparent));
+        }
+        .api-key-input {
+            -webkit-text-security: disc;
+            resize: vertical;
+        }
+        .api-key-input.is-revealed {
+            -webkit-text-security: none;
+        }
+        #drive-settings .drive-summary-input-wrap .btn,
+        #drive-settings .drive-summary-toggle {
+            min-height: 40px;
+            border-radius: var(--ld-input-radius, 8px);
+        }
+        @media (max-width: 768px) {
+            #settings-modal input,
+            #settings-modal select,
+            #settings-modal textarea,
+            .topic-question-input,
+            #summary-form input {
+                font-size: 16px;
+            }
+        }
         /* === SLIDER RIGHT MARGIN FIX 20250427 === */
         #sidebar-settings input[type="range"],
         .width-input-container input[type="range"],
@@ -11745,14 +11987,14 @@ ${error.stack}`);
         }
         .api-key-label textarea{
             flex:1;
-            min-height:38px;
-            line-height:1.2;
+            min-height:40px;
+            line-height:1.45;
             overflow-wrap:anywhere;
             resize:vertical;
         }
         .toggle-key-button{
-            width:24px;
-            height:24px;
+            width:36px;
+            height:36px;
             padding:0;
             display:inline-flex;
             align-items:center;
@@ -19427,11 +19669,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.2 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.3 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.1";
+  const VERSION = "[20260830] v1.0.3";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19463,6 +19705,12 @@ ${historyText}` : "已有问答历史：暂无",
   --ld-line: var(--primary-low, var(--border-color, #d5dbe1));
   --ld-overlay: color-mix(in srgb, #000 56%, transparent);
   --ld-radius: 16px;
+  --ld-input-bg: var(--d-input-bg-color, var(--secondary, var(--input-bg)));
+  --ld-input-fg: var(--d-input-text-color, var(--primary, var(--text-color)));
+  --ld-input-border: var(--input-border-color, var(--primary-400, var(--ld-line)));
+  --ld-input-radius: 8px;
+  --ld-input-focus: color-mix(in srgb, var(--ld-accent) 32%, transparent);
+  --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
 }
 
 html.dark #settings-modal,
@@ -19478,6 +19726,12 @@ body[data-theme="dark"] #settings-modal {
   --ld-muted: var(--primary-medium, #9aa3ad);
   --ld-line: var(--primary-low, var(--border-color, #3d444c));
   --ld-overlay: rgba(0, 0, 0, 0.62);
+  --ld-input-bg: var(--d-input-bg-color, var(--secondary, var(--input-bg)));
+  --ld-input-fg: var(--d-input-text-color, var(--primary, var(--text-color)));
+  --ld-input-border: var(--input-border-color, var(--primary-400, var(--ld-line)));
+  --ld-input-radius: 8px;
+  --ld-input-focus: color-mix(in srgb, var(--ld-accent) 32%, transparent);
+  --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
 }
 
 #settings-modal {
@@ -19740,6 +19994,12 @@ body[data-theme="dark"] #settings-modal {
 @media (prefers-reduced-motion: reduce) {
   #settings-modal,
   #settings-modal .modal-content,
+  #settings-modal input,
+  #settings-modal select,
+  #settings-modal textarea,
+  #summary-form input,
+  .topic-question-input-shell,
+  .slider,
   .summary-toast,
   .settings-toast,
   .ld-polish-confirm-root {
