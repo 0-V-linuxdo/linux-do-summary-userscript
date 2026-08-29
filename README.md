@@ -2,13 +2,13 @@
 
 给 Linux.do 用户用的浏览器脚本：在话题页和列表页一键生成结构化总结，也可以围绕当前话题继续提问、回看历史记录，并按需同步到 Google Drive。
 
-当前版本：**[20260830] v1.0.9**
+当前版本：**[20260830] v1.0.10**
 
 ## 安装
 
 1. 先安装一个用户脚本管理器，例如 Violentmonkey 或 Tampermonkey。
 2. 点击安装脚本：
-   [安装最新版 [20260830] v1.0.9](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
+   [安装最新版 [20260830] v1.0.10](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
 3. 打开 `https://linux.do/`，进入任意话题页。
 4. 点击侧边栏里的 `🛠️` 设置按钮，填写你的 API 地址、API Key 和模型名。
 
@@ -31,7 +31,7 @@
 - 弹窗高度：[20260830] v1.0.6 起设置弹窗外壳锁定为约 70vh（窄屏 85dvh），切换分组时窗口不再上下跳动，内容在面板内滚动。
 - 弹窗焦点：[20260830] v1.0.7 起打开设置不再聚焦左上角折叠按钮；蓝色焦点环只在键盘导航时出现。
 - 分组选中：[20260830] v1.0.8 起选中 tab 沿用原来的填充底色，去掉 accent 描边和混色，避免看起来像一层厚焦点环。
-- DeArrow 设置：[20260830] v1.0.9 起拆成「开关 / 提示词 / 模型与范围」三个子 tab，不再把提示词和模型堆在同一页。
+- DeArrow 设置：[20260830] v1.0.9 起拆成「自动 / 提示词 / 模型与范围」三个子 tab；v1.0.10 将原「开关」改名为「自动」，避免语意不清。
 
 ## 使用方式
 
