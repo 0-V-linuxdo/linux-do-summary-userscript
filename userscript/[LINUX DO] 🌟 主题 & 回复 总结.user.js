@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.5
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.6
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.5
+// @version      [20260830] v1.0.6
+// @update-log   [20260830] v1.0.6: 锁定设置弹窗外壳高度，切 tab 不再上下跳；面板内滚动。
 // @update-log   [20260830] v1.0.5: 设置输入字号对齐 --font-0；密钥查看改为 FormKit 风格图标钮。
 // @update-log   [20260830] v1.0.4: 恢复 4px 圆角 + 实色 accent 焦点环；token 走 --d-input-* / --ld-accent。
 // @update-log   [20260830] v1.0.3: 按钮统一 8px / 40px，与输入同套 focus-visible；保存/删除/添加/侧栏操作。
@@ -19716,11 +19717,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.5 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.6 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.5";
+  const VERSION = "[20260830] v1.0.6";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19810,8 +19811,8 @@ body[data-theme="dark"] #settings-modal {
   box-sizing: border-box !important;
   width: min(760px, calc(100vw - 32px)) !important;
   max-width: 760px !important;
-  height: auto !important;
-  min-height: 0 !important;
+  height: min(70vh, calc(100dvh - 24px)) !important;
+  min-height: min(70vh, calc(100dvh - 24px)) !important;
   max-height: calc(100dvh - 24px) !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -19855,11 +19856,10 @@ body[data-theme="dark"] #settings-modal {
 }
 
 #settings-modal .modal-panels {
-  flex: 1 1 auto !important;
+  flex: 1 1 0 !important;
   min-width: 0 !important;
   min-height: 0 !important;
-  height: auto !important;
-  max-height: calc(100dvh - 8rem) !important;
+  max-height: none !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
 }
@@ -20032,6 +20032,8 @@ body[data-theme="dark"] #settings-modal {
   #settings-modal .modal-content {
     width: 100% !important;
     max-width: 100% !important;
+    height: 85dvh !important;
+    min-height: 85dvh !important;
     max-height: 85dvh !important;
     border-radius: 16px 16px 0 0 !important;
   }
@@ -20188,8 +20190,12 @@ body[data-theme="dark"] #settings-modal {
     if (!content || !panels || !isModalOpen(modal)) return;
 
     const viewport = Math.round(window.visualViewport?.height || window.innerHeight);
-    const gutter = window.innerWidth <= 720 ? 0 : 24;
+    const mobile = window.innerWidth <= 720;
+    const gutter = mobile ? 0 : 24;
     const boxMax = Math.max(240, viewport - gutter);
+    const shellH = Math.max(240, Math.min(Math.round(viewport * (mobile ? 0.85 : 0.7)), boxMax));
+    content.style.setProperty("height", `${shellH}px`, "important");
+    content.style.setProperty("min-height", `${shellH}px`, "important");
     content.style.setProperty("max-height", `${boxMax}px`, "important");
 
     const headerH = header ? Math.ceil(header.getBoundingClientRect().height) : 56;
@@ -20197,7 +20203,9 @@ body[data-theme="dark"] #settings-modal {
     const bodyChrome = bodyStyle
       ? (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0)
       : 36;
-    const panelsMax = Math.max(160, Math.floor(boxMax - headerH - bodyChrome));
+    const panelsMax = Math.max(160, Math.floor(shellH - headerH - bodyChrome));
+    panels.style.setProperty("height", `${panelsMax}px`, "important");
+    panels.style.setProperty("min-height", "0px", "important");
     panels.style.setProperty("max-height", `${panelsMax}px`, "important");
     if (tabs) tabs.style.setProperty("max-height", `${panelsMax}px`, "important");
   }
@@ -20253,6 +20261,13 @@ body[data-theme="dark"] #settings-modal {
       modal.addEventListener("mousedown", (event) => {
         if (event.target === modal) closeModal(modal);
       });
+      modal.addEventListener("click", (event) => {
+        if (event.target.closest?.(".tab-button, .sidebar-sub-tab-button, .prompt-sub-tab-button, .api-sub-tab-button, .list-summary-sub-tab-button, .toast-sub-tab-button, .mobile-tab-select, #mobile-tab-select, #toggle-tabs-button")) {
+          requestAnimationFrame(() => layoutModal(modal));
+        }
+      });
+      const mobileSelect = modal.querySelector("#mobile-tab-select");
+      mobileSelect?.addEventListener("change", () => requestAnimationFrame(() => layoutModal(modal)));
       enhanceModal(modal);
       new MutationObserver(() => enhanceModal(modal)).observe(modal, {
         attributes: true,
