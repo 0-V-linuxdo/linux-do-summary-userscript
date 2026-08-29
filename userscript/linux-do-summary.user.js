@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.6
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.7
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.6
+// @version      [20260830] v1.0.7
+// @update-log   [20260830] v1.0.7: 打开设置不再聚焦左上角折叠按钮；tab 选中改填充，焦点环只给键盘。
 // @update-log   [20260830] v1.0.6: 锁定设置弹窗外壳高度，切 tab 不再上下跳；面板内滚动。
 // @update-log   [20260830] v1.0.5: 设置输入字号对齐 --font-0；密钥查看改为 FormKit 风格图标钮。
 // @update-log   [20260830] v1.0.4: 恢复 4px 圆角 + 实色 accent 焦点环；token 走 --d-input-* / --ld-accent。
@@ -8351,7 +8352,7 @@ ${error.stack}`);
                 --result-bg: #1e1e1e;
                 --modal-bg: #333333;
                 --modal-text: #e0e0e0;
-                --tab-active-bg: rgba(100, 181, 246, 0.2);
+                --tab-active-bg: rgba(100, 181, 246, 0.32);
                 --tab-hover-bg: rgba(100, 181, 246, 0.12);
                 --primary-button-bg: #64b5f6;
                 --secondary-button-bg: #4a4a4a;
@@ -8423,7 +8424,7 @@ ${error.stack}`);
             --result-bg: #1e1e1e;
             --modal-bg: #333333;
             --modal-text: #e0e0e0;
-            --tab-active-bg: rgba(100, 181, 246, 0.2);
+            --tab-active-bg: rgba(100, 181, 246, 0.32);
             --tab-hover-bg: rgba(100, 181, 246, 0.12);
             --primary-button-bg: #64b5f6;
             --secondary-button-bg: #4a4a4a;
@@ -8839,7 +8840,10 @@ ${error.stack}`);
           align-items: center;
           justify-content: center;
         }
-        .custom-button:focus,
+        .custom-button:focus {
+          outline: none;
+          box-shadow: none;
+        }
         .custom-button:focus-visible {
           outline: none;
           box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
@@ -9162,14 +9166,17 @@ ${error.stack}`);
             background-color: var(--tab-hover-bg);
             transform: translateY(-1px);
         }
-        #settings-modal .tab-button:focus,
+        #settings-modal .tab-button:focus {
+            outline: none;
+            box-shadow: none;
+        }
         #settings-modal .tab-button:focus-visible {
             outline: none;
             box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
         #settings-modal .tab-button.active {
             background-color: var(--tab-active-bg);
-            border-color: var(--highlight-color);
+            border-color: transparent;
         }
         #settings-modal .tab-button .tab-icon {
             font-size: 18px;
@@ -9360,7 +9367,10 @@ ${error.stack}`);
         .sidebar-sub-tab-button:focus,
         .list-summary-sub-tab-button:focus,
         .prompt-sub-tab-button:focus,
-        .toast-sub-tab-button:focus,
+        .toast-sub-tab-button:focus {
+            outline: none;
+            box-shadow: none;
+        }
         .api-sub-tab-button:focus-visible,
         .sidebar-sub-tab-button:focus-visible,
         .list-summary-sub-tab-button:focus-visible,
@@ -9382,7 +9392,7 @@ ${error.stack}`);
         .prompt-sub-tab-button.active,
         .toast-sub-tab-button.active {
             background-color: var(--tab-active-bg);
-            border-color: var(--highlight-color);
+            border-color: transparent;
             color: var(--text-color);
         }
         .api-sub-tab-panels,
@@ -9494,16 +9504,23 @@ ${error.stack}`);
             background-color: var(--btn-default-active);
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
         }
-        #settings-modal .btn:focus,
+        #settings-modal .btn:focus {
+            outline: none;
+            box-shadow: none;
+        }
         #settings-modal .btn:focus-visible {
             outline: none;
             box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
         }
-        #settings-modal .btn-success:focus,
+        #settings-modal .btn-success:focus {
+            box-shadow: none;
+        }
         #settings-modal .btn-success:focus-visible {
             box-shadow: 0 0 0 2px var(--btn-success-bg);
         }
-        #settings-modal .btn-danger:focus,
+        #settings-modal .btn-danger:focus {
+            box-shadow: none;
+        }
         #settings-modal .btn-danger:focus-visible {
             box-shadow: 0 0 0 2px var(--btn-danger-bg);
         }
@@ -19717,11 +19734,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.6 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.7 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.6";
+  const VERSION = "[20260830] v1.0.7";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19761,6 +19778,7 @@ ${historyText}` : "已有问答历史：暂无",
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
   --ld-font: var(--font-0, 1em);
   --ld-font-sm: var(--font-down-1, 0.8706em);
+  --ld-tab-active: color-mix(in srgb, var(--ld-accent) 22%, var(--ld-modal));
 }
 
 html.dark #settings-modal,
@@ -19784,6 +19802,7 @@ body[data-theme="dark"] #settings-modal {
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
   --ld-font: var(--font-0, 1em);
   --ld-font-sm: var(--font-down-1, 0.8706em);
+  --ld-tab-active: color-mix(in srgb, var(--ld-accent) 22%, var(--ld-modal));
 }
 
 #settings-modal {
@@ -19822,6 +19841,11 @@ body[data-theme="dark"] #settings-modal {
   border: 0 !important;
   border-radius: var(--ld-radius) !important;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+#settings-modal .modal-content:focus,
+#settings-modal .modal-content:focus-visible {
+  outline: none;
 }
 
 #settings-modal .modal-header {
@@ -19881,10 +19905,59 @@ body[data-theme="dark"] #settings-modal {
 }
 
 #settings-modal #close-settings:focus,
+#settings-modal .modal-header-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 #settings-modal #close-settings:focus-visible,
-#settings-modal .modal-header-button:focus,
 #settings-modal .modal-header-button:focus-visible {
   outline: none;
+  box-shadow: 0 0 0 2px var(--ld-accent);
+}
+
+#settings-modal .tab-button:focus,
+#settings-modal .api-sub-tab-button:focus,
+#settings-modal .sidebar-sub-tab-button:focus,
+#settings-modal .list-summary-sub-tab-button:focus,
+#settings-modal .prompt-sub-tab-button:focus,
+#settings-modal .toast-sub-tab-button:focus,
+#settings-modal .btn:focus,
+#settings-modal .custom-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+#settings-modal .tab-button:focus-visible,
+#settings-modal .api-sub-tab-button:focus-visible,
+#settings-modal .sidebar-sub-tab-button:focus-visible,
+#settings-modal .list-summary-sub-tab-button:focus-visible,
+#settings-modal .prompt-sub-tab-button:focus-visible,
+#settings-modal .toast-sub-tab-button:focus-visible,
+#settings-modal .btn:focus-visible,
+#settings-modal .custom-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ld-accent);
+}
+
+#settings-modal .tab-button.active,
+#settings-modal .api-sub-tab-button.active,
+#settings-modal .sidebar-sub-tab-button.active,
+#settings-modal .list-summary-sub-tab-button.active,
+#settings-modal .prompt-sub-tab-button.active,
+#settings-modal .toast-sub-tab-button.active {
+  background: var(--ld-tab-active);
+  border-color: transparent;
+  color: var(--ld-ink);
+  box-shadow: none;
+}
+
+#settings-modal .tab-button.active:focus-visible,
+#settings-modal .api-sub-tab-button.active:focus-visible,
+#settings-modal .sidebar-sub-tab-button.active:focus-visible,
+#settings-modal .list-summary-sub-tab-button.active:focus-visible,
+#settings-modal .prompt-sub-tab-button.active:focus-visible,
+#settings-modal .toast-sub-tab-button.active:focus-visible {
   box-shadow: 0 0 0 2px var(--ld-accent);
 }
 
@@ -20018,7 +20091,11 @@ body[data-theme="dark"] #settings-modal {
   background: #d95a4f;
 }
 
-.ld-polish-confirm button:focus,
+.ld-polish-confirm button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .ld-polish-confirm button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--ld-accent, #64b5f6);
@@ -20137,6 +20214,23 @@ body[data-theme="dark"] #settings-modal {
     )].filter((el) => el.offsetParent !== null || el.getClientRects().length);
   }
 
+  function focusQuiet(el) {
+    if (!el || typeof el.focus !== "function") return;
+    try {
+      el.focus({ preventScroll: true, focusVisible: false });
+    } catch {
+      el.focus();
+    }
+  }
+
+  function focusDialogShell(modal) {
+    const content = modal.querySelector(".modal-content") || modal;
+    if (content.getAttribute("tabindex") !== "-1") {
+      content.setAttribute("tabindex", "-1");
+    }
+    focusQuiet(content);
+  }
+
   function trapKey(event) {
     const modal = document.getElementById("settings-modal");
     if (!modal || !modal.classList.contains("ld-polish-open")) return;
@@ -20177,7 +20271,7 @@ body[data-theme="dark"] #settings-modal {
   function restoreFocus() {
     const target = lastFocus || document.getElementById("settings-button");
     if (target && typeof target.focus === "function") {
-      requestAnimationFrame(() => target.focus());
+      requestAnimationFrame(() => focusQuiet(target));
     }
   }
 
@@ -20233,6 +20327,7 @@ body[data-theme="dark"] #settings-modal {
     }
 
     const open = isModalOpen(modal);
+    const wasOpen = modal.dataset.ldWasOpen === "true";
     modal.classList.toggle("ld-polish-open", open);
     if (open) {
       bindLayout(modal);
@@ -20240,12 +20335,11 @@ body[data-theme="dark"] #settings-modal {
         document.addEventListener("keydown", trapKey, true);
         trapBound = true;
       }
-      const first = focusables(modal.querySelector(".modal-content") || modal)[0];
       requestAnimationFrame(() => {
-        first?.focus();
+        if (!wasOpen) focusDialogShell(modal);
         layoutModal(modal);
       });
-    } else if (modal.dataset.ldWasOpen === "true") {
+    } else if (wasOpen) {
       restoreFocus();
     }
     modal.dataset.ldWasOpen = open ? "true" : "false";
@@ -20346,7 +20440,7 @@ body[data-theme="dark"] #settings-modal {
       ok.addEventListener("click", onOk);
       root.addEventListener("mousedown", onBackdrop);
       document.addEventListener("keydown", onKey, true);
-      requestAnimationFrame(() => cancel.focus());
+      requestAnimationFrame(() => focusQuiet(cancel));
     });
   }
 
