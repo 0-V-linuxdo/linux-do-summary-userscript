@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.8
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.9
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.8
+// @version      [20260830] v1.0.9
+// @update-log   [20260830] v1.0.9: DeArrow 设置拆成开关 / 提示词 / 模型与范围 三个子 tab。
 // @update-log   [20260830] v1.0.8: 选中 tab 沿用原填充底色，去掉 accent 混色与描边；焦点环只给键盘。
 // @update-log   [20260830] v1.0.7: 打开设置不再聚焦左上角折叠按钮；tab 选中改填充，焦点环只给键盘。
 // @update-log   [20260830] v1.0.6: 锁定设置弹窗外壳高度，切 tab 不再上下跳；面板内滚动。
@@ -6111,7 +6112,7 @@ ${error.stack}`);
       const dearrowRewriteApiSelect = document.getElementById("dearrow-rewrite-api-select");
       const dearrowScopeRulesInput = document.getElementById("dearrow-scope-rules");
       const dearrowScopeError = document.getElementById("dearrow-scope-error");
-      const saveDeArrowSettingsButton = document.getElementById("save-dearrow-settings");
+      const saveDeArrowSettingsButtons = document.querySelectorAll("#dearrow-settings .save-dearrow-settings");
       const getDefaultDeArrowPrompt = (key) => String(defaultDeArrowSettings2?.[key] || "").trim();
       const normalizePromptValue = (value, fallback = "") => typeof normalizeDeArrowPrompt2 === "function" ? normalizeDeArrowPrompt2(value, fallback) : String(value ?? "").trim() || String(fallback || "").trim();
       const syncAutoSummarizeSwitches = () => {
@@ -6209,6 +6210,20 @@ ${error.stack}`);
             const targetId = button.getAttribute("data-list-summary-tab");
             listSummarySubTabButtons.forEach((btn) => btn.classList.remove("active"));
             listSummarySubTabContents.forEach((content) => content.classList.remove("active"));
+            button.classList.add("active");
+            const targetContent = document.getElementById(targetId);
+            if (targetContent) targetContent.classList.add("active");
+          });
+        });
+      }
+      const dearrowSubTabButtons = document.querySelectorAll("#dearrow-settings .dearrow-sub-tab-button");
+      const dearrowSubTabContents = document.querySelectorAll("#dearrow-settings .dearrow-sub-tab-content");
+      if (dearrowSubTabButtons.length && dearrowSubTabContents.length) {
+        dearrowSubTabButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const targetId = button.getAttribute("data-dearrow-tab");
+            dearrowSubTabButtons.forEach((btn) => btn.classList.remove("active"));
+            dearrowSubTabContents.forEach((content) => content.classList.remove("active"));
             button.classList.add("active");
             const targetContent = document.getElementById(targetId);
             if (targetContent) targetContent.classList.add("active");
@@ -6488,9 +6503,9 @@ ${error.stack}`);
       dearrowAutoRewriteSwitch?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
       dearrowJudgmentApiSelect?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
       dearrowRewriteApiSelect?.addEventListener("change", () => saveDeArrowSettings({ showToast: false }));
-      if (saveDeArrowSettingsButton) {
-        saveDeArrowSettingsButton.addEventListener("click", () => saveDeArrowSettings());
-      }
+      saveDeArrowSettingsButtons.forEach((button) => {
+        button.addEventListener("click", () => saveDeArrowSettings());
+      });
       updateDeArrowSettingsInputs();
       function updatePromptConfigInputs() {
         if (!promptName || !promptSummaryMethod || !promptOutputFormat) return;
@@ -8164,7 +8179,13 @@ ${error.stack}`);
                 </div>
             </div>
             <div class="tab-content" id="dearrow-settings">
-                <div class="settings-card dearrow-settings-card">
+                <div class="dearrow-sub-tabs">
+                    <button class="dearrow-sub-tab-button active" data-dearrow-tab="dearrow-settings-switches">开关</button>
+                    <button class="dearrow-sub-tab-button" data-dearrow-tab="dearrow-settings-prompts">提示词</button>
+                    <button class="dearrow-sub-tab-button" data-dearrow-tab="dearrow-settings-models">模型 / 范围</button>
+                </div>
+                <div class="dearrow-sub-tab-panels">
+                    <div class="dearrow-sub-tab-content settings-card dearrow-settings-card active" id="dearrow-settings-switches">
                     <div class="switch-container">
                         <span class="switch-label">1. 标题党自动替换（关/开）</span>
                         <label class="switch switch-on-off">
@@ -8182,41 +8203,47 @@ ${error.stack}`);
                         </label>
                         <span class="tooltip">判定为标题党后自动读取首帖并重写标题；关闭时仍可点击 DeArrow 按钮手动重写。</span>
                     </div>
-                    <hr>
+                    <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。开关会立即保存。</p>
+                    </div>
+                    <div class="dearrow-sub-tab-content settings-card dearrow-settings-card" id="dearrow-settings-prompts">
                     <label class="dearrow-setting-field dearrow-prompt-field">
-                        <span class="dearrow-setting-label">3. 标题党判断提示词：</span>
-                        <textarea id="dearrow-judgment-prompt" rows="7" spellcheck="false" placeholder="留空使用默认提示词"></textarea>
+                        <span class="dearrow-setting-label">1. 标题党判断提示词：</span>
+                        <textarea id="dearrow-judgment-prompt" rows="8" spellcheck="false" placeholder="留空使用默认提示词"></textarea>
                         <span class="tooltip">用于判断原标题是否为标题党。留空恢复默认提示词；请保留严格 JSON 返回格式。</span>
                     </label>
                     <hr>
                     <label class="dearrow-setting-field dearrow-prompt-field">
-                        <span class="dearrow-setting-label">4. 标题重写提示词：</span>
-                        <textarea id="dearrow-rewrite-prompt" rows="7" spellcheck="false" placeholder="留空使用默认提示词"></textarea>
+                        <span class="dearrow-setting-label">2. 标题重写提示词：</span>
+                        <textarea id="dearrow-rewrite-prompt" rows="8" spellcheck="false" placeholder="留空使用默认提示词"></textarea>
                         <span class="tooltip">用于根据首帖重写标题。留空恢复默认提示词；请保留严格 JSON 返回格式。</span>
                     </label>
-                    <hr>
+                    <div class="settings-card-actions dearrow-settings-actions">
+                        <button type="button" class="custom-button btn btn-icon-text btn-primary save-button save-dearrow-settings"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存并应用</span></button>
+                    </div>
+                    </div>
+                    <div class="dearrow-sub-tab-content settings-card dearrow-settings-card" id="dearrow-settings-models">
                     <label class="dearrow-setting-field">
-                        <span class="dearrow-setting-label">5. 标题判断模型（API 配置）：</span>
+                        <span class="dearrow-setting-label">1. 标题判断模型（API 配置）：</span>
                         <select id="dearrow-judgment-api-select"></select>
                         <span class="tooltip">用于批量判断原标题是否为标题党，建议选择速度快、成本低的小模型。</span>
                     </label>
                     <hr>
                     <label class="dearrow-setting-field">
-                        <span class="dearrow-setting-label">6. 标题重写模型（API 配置）：</span>
+                        <span class="dearrow-setting-label">2. 标题重写模型（API 配置）：</span>
                         <select id="dearrow-rewrite-api-select"></select>
                         <span class="tooltip">用于读取首帖正文后生成新标题，可独立选择更适合写作的模型。</span>
                     </label>
                     <hr>
                     <label class="dearrow-setting-field dearrow-scope-field">
-                        <span class="dearrow-setting-label">7. 作用范围（每行一个完整 URL）：</span>
+                        <span class="dearrow-setting-label">3. 作用范围（每行一个完整 URL）：</span>
                         <textarea id="dearrow-scope-rules" rows="5" spellcheck="false" placeholder="https://linux.do/latest?order=created"></textarea>
                         <span class="tooltip">默认精确匹配；可使用 * 匹配任意字符。仅接受 https://linux.do URL，URL 的 #hash 会被忽略。</span>
                     </label>
                     <div id="dearrow-scope-error" class="dearrow-scope-error" role="status" aria-live="polite"></div>
                     <div class="settings-card-actions dearrow-settings-actions">
-                        <button id="save-dearrow-settings" class="custom-button btn btn-icon-text btn-primary save-button"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存并应用</span></button>
+                        <button type="button" class="custom-button btn btn-icon-text btn-primary save-button save-dearrow-settings"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存并应用</span></button>
                     </div>
-                    <p class="tooltip dearrow-drive-note">判断和改写结果会保存在本地；启用 Google Drive 同步后也会自动跨设备同步。</p>
+                    </div>
                 </div>
             </div>
             <!-- 新增Toast设置页面 -->
@@ -9342,6 +9369,7 @@ ${error.stack}`);
         .api-sub-tabs,
         .sidebar-sub-tabs,
         .list-summary-sub-tabs,
+        .dearrow-sub-tabs,
         .prompt-sub-tabs,
         .toast-sub-tabs {
             display: inline-flex;
@@ -9352,6 +9380,7 @@ ${error.stack}`);
         .api-sub-tab-button,
         .sidebar-sub-tab-button,
         .list-summary-sub-tab-button,
+        .dearrow-sub-tab-button,
         .prompt-sub-tab-button,
         .toast-sub-tab-button {
             min-height: var(--ld-btn-height, 40px);
@@ -9367,6 +9396,7 @@ ${error.stack}`);
         .api-sub-tab-button:focus,
         .sidebar-sub-tab-button:focus,
         .list-summary-sub-tab-button:focus,
+        .dearrow-sub-tab-button:focus,
         .prompt-sub-tab-button:focus,
         .toast-sub-tab-button:focus {
             outline: none;
@@ -9375,6 +9405,7 @@ ${error.stack}`);
         .api-sub-tab-button:focus-visible,
         .sidebar-sub-tab-button:focus-visible,
         .list-summary-sub-tab-button:focus-visible,
+        .dearrow-sub-tab-button:focus-visible,
         .prompt-sub-tab-button:focus-visible,
         .toast-sub-tab-button:focus-visible {
             outline: none;
@@ -9383,6 +9414,7 @@ ${error.stack}`);
         .api-sub-tab-button:hover,
         .sidebar-sub-tab-button:hover,
         .list-summary-sub-tab-button:hover,
+        .dearrow-sub-tab-button:hover,
         .prompt-sub-tab-button:hover {
             background-color: var(--tab-hover-bg);
             transform: translateY(-1px);
@@ -9390,6 +9422,7 @@ ${error.stack}`);
         .api-sub-tab-button.active,
         .sidebar-sub-tab-button.active,
         .list-summary-sub-tab-button.active,
+        .dearrow-sub-tab-button.active,
         .prompt-sub-tab-button.active,
         .toast-sub-tab-button.active {
             background-color: var(--tab-active-bg);
@@ -9399,6 +9432,7 @@ ${error.stack}`);
         .api-sub-tab-panels,
         .sidebar-sub-tab-panels,
         .list-summary-sub-tab-panels,
+        .dearrow-sub-tab-panels,
         .prompt-sub-tab-panels,
         .toast-sub-tab-panels {
             position: relative;
@@ -9406,6 +9440,7 @@ ${error.stack}`);
         .api-sub-tab-content,
         .sidebar-sub-tab-content,
         .list-summary-sub-tab-content,
+        .dearrow-sub-tab-content,
         .prompt-sub-tab-content,
         .toast-sub-tab-content {
             display: none;
@@ -9413,6 +9448,7 @@ ${error.stack}`);
         .api-sub-tab-content.active,
         .sidebar-sub-tab-content.active,
         .list-summary-sub-tab-content.active,
+        .dearrow-sub-tab-content.active,
         .prompt-sub-tab-content.active,
         .toast-sub-tab-content.active {
             display: block;
@@ -9421,6 +9457,7 @@ ${error.stack}`);
             .api-sub-tabs,
             .sidebar-sub-tabs,
             .list-summary-sub-tabs,
+            .dearrow-sub-tabs,
             .prompt-sub-tabs,
             .toast-sub-tabs {
                 width: 100%;
@@ -9428,6 +9465,7 @@ ${error.stack}`);
             .api-sub-tab-button,
             .sidebar-sub-tab-button,
             .list-summary-sub-tab-button,
+            .dearrow-sub-tab-button,
             .prompt-sub-tab-button,
             .toast-sub-tab-button {
                 flex: 1 1 48%;
@@ -19735,11 +19773,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.8 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.9 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.8";
+  const VERSION = "[20260830] v1.0.9";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19919,6 +19957,7 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .api-sub-tab-button:focus,
 #settings-modal .sidebar-sub-tab-button:focus,
 #settings-modal .list-summary-sub-tab-button:focus,
+#settings-modal .dearrow-sub-tab-button:focus,
 #settings-modal .prompt-sub-tab-button:focus,
 #settings-modal .toast-sub-tab-button:focus,
 #settings-modal .btn:focus,
@@ -19931,6 +19970,7 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .api-sub-tab-button:focus-visible,
 #settings-modal .sidebar-sub-tab-button:focus-visible,
 #settings-modal .list-summary-sub-tab-button:focus-visible,
+#settings-modal .dearrow-sub-tab-button:focus-visible,
 #settings-modal .prompt-sub-tab-button:focus-visible,
 #settings-modal .toast-sub-tab-button:focus-visible,
 #settings-modal .btn:focus-visible,
@@ -19943,6 +19983,7 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .api-sub-tab-button.active,
 #settings-modal .sidebar-sub-tab-button.active,
 #settings-modal .list-summary-sub-tab-button.active,
+#settings-modal .dearrow-sub-tab-button.active,
 #settings-modal .prompt-sub-tab-button.active,
 #settings-modal .toast-sub-tab-button.active {
   background: var(--tab-active-bg);
@@ -19954,6 +19995,7 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .api-sub-tab-button.active:focus-visible,
 #settings-modal .sidebar-sub-tab-button.active:focus-visible,
 #settings-modal .list-summary-sub-tab-button.active:focus-visible,
+#settings-modal .dearrow-sub-tab-button.active:focus-visible,
 #settings-modal .prompt-sub-tab-button.active:focus-visible,
 #settings-modal .toast-sub-tab-button.active:focus-visible {
   box-shadow: 0 0 0 2px var(--ld-accent);
@@ -20354,7 +20396,7 @@ body[data-theme="dark"] #settings-modal {
         if (event.target === modal) closeModal(modal);
       });
       modal.addEventListener("click", (event) => {
-        if (event.target.closest?.(".tab-button, .sidebar-sub-tab-button, .prompt-sub-tab-button, .api-sub-tab-button, .list-summary-sub-tab-button, .toast-sub-tab-button, .mobile-tab-select, #mobile-tab-select, #toggle-tabs-button")) {
+        if (event.target.closest?.(".tab-button, .sidebar-sub-tab-button, .prompt-sub-tab-button, .api-sub-tab-button, .list-summary-sub-tab-button, .dearrow-sub-tab-button, .toast-sub-tab-button, .mobile-tab-select, #mobile-tab-select, #toggle-tabs-button")) {
           requestAnimationFrame(() => layoutModal(modal));
         }
       });
