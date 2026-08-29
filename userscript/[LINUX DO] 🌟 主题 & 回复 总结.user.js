@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.4
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.5
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.4
+// @version      [20260830] v1.0.5
+// @update-log   [20260830] v1.0.5: 设置输入字号对齐 --font-0；密钥查看改为 FormKit 风格图标钮。
 // @update-log   [20260830] v1.0.4: 恢复 4px 圆角 + 实色 accent 焦点环；token 走 --d-input-* / --ld-accent。
 // @update-log   [20260830] v1.0.3: 按钮统一 8px / 40px，与输入同套 focus-visible；保存/删除/添加/侧栏操作。
 // @update-log   [20260830] v1.0.2: 输入框统一 token、8px 圆角、半透明 focus-visible；密钥/开关/滑块/只读主题 ID。
@@ -378,6 +379,49 @@
   function normalizeText(value) {
     return value === null || value === void 0 ? "" : String(value).trim();
   }
+  const SECRET_ICON_EYE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 12s3.5-6.5 9.4-6.5S21.4 12 21.4 12 17.9 18.5 12 18.5 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="3.1"/></svg>';
+  const SECRET_ICON_EYE_SLASH = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 3.2l17.6 17.6"/><path d="M10.4 6.3A9.3 9.3 0 0 1 12 6c5.9 0 9.4 6 9.4 6a15.7 15.7 0 0 1-3.4 3.9"/><path d="M6.7 6.9C4.3 8.6 2.6 12 2.6 12S6.1 18.5 12 18.5c1.5 0 2.8-.3 4-.8"/><path d="M9.8 9.8a3.1 3.1 0 0 0 4.4 4.4"/></svg>';
+  function paintSecretToggle(button, revealed) {
+    if (!button) return;
+    const showLabel = button.getAttribute("data-show-label") || "显示密钥";
+    const hideLabel = button.getAttribute("data-hide-label") || "隐藏密钥";
+    button.innerHTML = revealed ? SECRET_ICON_EYE_SLASH : SECRET_ICON_EYE;
+    button.setAttribute("aria-pressed", revealed ? "true" : "false");
+    button.setAttribute("aria-label", revealed ? hideLabel : showLabel);
+    button.setAttribute("title", revealed ? hideLabel : showLabel);
+  }
+  function bindSecretField(wrap, options = {}) {
+    if (!wrap || wrap.dataset.secretToggleBound === "true") return;
+    const input = wrap.querySelector(".ld-secret-input") || wrap.querySelector("input, textarea");
+    const button = wrap.querySelector(".ld-secret-toggle");
+    if (!input || !button) return;
+    wrap.dataset.secretToggleBound = "true";
+    const isTextarea = input.tagName === "TEXTAREA";
+    let revealed = false;
+    const apply = () => {
+      if (isTextarea) {
+        input.classList.toggle("is-revealed", revealed);
+        input.style.webkitTextSecurity = revealed ? "none" : "disc";
+      } else {
+        input.type = revealed ? "text" : "password";
+      }
+      wrap.classList.toggle("is-revealed", revealed);
+      paintSecretToggle(button, revealed);
+      if (typeof options.onRevealChange === "function") options.onRevealChange(revealed, input);
+    };
+    const syncFocus = () => {
+      wrap.classList.toggle("is-focused", wrap.contains(document.activeElement));
+    };
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      revealed = !revealed;
+      apply();
+      if (typeof input.focus === "function") input.focus({ preventScroll: true });
+    });
+    wrap.addEventListener("focusin", syncFocus);
+    wrap.addEventListener("focusout", syncFocus);
+    apply();
+  }
   function createFallbackPresetId(index) {
     return `custom-${index + 1}`;
   }
@@ -707,16 +751,16 @@
                 <label class="drive-summary-field">Client ID：
                     <input type="text" id="drive-summary-client-id" placeholder="Client ID" autocomplete="off" spellcheck="false">
                 </label>
-                <label class="drive-summary-field">Client Secret：
-                    <div class="drive-summary-input-wrap">
-                        <input type="password" id="drive-summary-client-secret" placeholder="Client Secret" autocomplete="off" spellcheck="false">
-                        <button type="button" class="custom-button btn btn-default drive-summary-toggle" data-target="drive-summary-client-secret" aria-pressed="false">显示</button>
+                <label class="drive-summary-field ld-secret-field">Client Secret：
+                    <div class="ld-secret-wrap drive-summary-input-wrap">
+                        <input type="password" id="drive-summary-client-secret" class="ld-secret-input" placeholder="Client Secret" autocomplete="off" spellcheck="false">
+                        <button type="button" class="ld-secret-toggle" data-show-label="显示 Client Secret" data-hide-label="隐藏 Client Secret" aria-pressed="false"></button>
                     </div>
                 </label>
-                <label class="drive-summary-field">Refresh Token：
-                    <div class="drive-summary-input-wrap">
-                        <input type="password" id="drive-summary-refresh-token" placeholder="Refresh Token" autocomplete="off" spellcheck="false">
-                        <button type="button" class="custom-button btn btn-default drive-summary-toggle" data-target="drive-summary-refresh-token" aria-pressed="false">显示</button>
+                <label class="drive-summary-field ld-secret-field">Refresh Token：
+                    <div class="ld-secret-wrap drive-summary-input-wrap">
+                        <input type="password" id="drive-summary-refresh-token" class="ld-secret-input" placeholder="Refresh Token" autocomplete="off" spellcheck="false">
+                        <button type="button" class="ld-secret-toggle" data-show-label="显示 Refresh Token" data-hide-label="隐藏 Refresh Token" aria-pressed="false"></button>
                     </div>
                 </label>
             </div>
@@ -732,7 +776,6 @@
       const driveClientIdInput = section.querySelector("#drive-summary-client-id");
       const driveClientSecretInput = section.querySelector("#drive-summary-client-secret");
       const driveRefreshTokenInput = section.querySelector("#drive-summary-refresh-token");
-      const driveToggleButtons = section.querySelectorAll(".drive-summary-toggle");
       const driveSaveButton = section.querySelector("#drive-summary-save");
       const driveSyncButton = section.querySelector("#drive-summary-sync");
       const driveRebuildButton = section.querySelector("#drive-summary-rebuild-topic-ids");
@@ -768,17 +811,7 @@
           createSettingsToast2?.("当前版本缺少重建能力，请更新脚本。", "error", 3200);
         }
       });
-      driveToggleButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          const targetId = button.dataset.target;
-          const targetInput = section.querySelector(`#${targetId}`);
-          if (!targetInput) return;
-          const isHidden = targetInput.type === "password";
-          targetInput.type = isHidden ? "text" : "password";
-          button.textContent = isHidden ? "隐藏" : "显示";
-          button.setAttribute("aria-pressed", isHidden ? "true" : "false");
-        });
-      });
+      section.querySelectorAll(".ld-secret-wrap").forEach((wrap) => bindSecretField(wrap));
     }
     function buildImportExportUI(container) {
       if (!container || container.dataset.importExportInitialized === "true") {
@@ -5945,44 +5978,33 @@ ${error.stack}`);
       const apiMaxImages = document.getElementById("api-max-images");
       const apiMaxImageMb = document.getElementById("api-max-image-mb");
       const apiMaxTotalImageMb = document.getElementById("api-max-total-image-mb");
-      const toggleApiKeyButton = document.getElementById("toggle-api-key");
-      if (toggleApiKeyButton && apiKey) {
-        let adjustApiKeyTextarea = function() {
-          if (!apiKey) return;
+      const apiKeyWrap = apiKey && apiKey.closest(".ld-secret-wrap");
+      if (apiKeyWrap && apiKey) {
+        const adjustApiKeyTextarea = (revealed) => {
           const lineHeight = parseInt(getComputedStyle(apiKey).lineHeight, 10) || 18;
-          if (apiKeyVisible) {
-            apiKey.disabled = false;
-            apiKey.classList.add("is-revealed");
-            apiKey.style.webkitTextSecurity = "none";
+          const minHeight = Math.max(lineHeight, 22);
+          if (revealed) {
             apiKey.style.overflowY = "hidden";
             apiKey.style.height = "auto";
             const maxLines = 3;
             const lines = (apiKey.value.match(/\n/g) || []).length + 1;
             if (lines <= maxLines) {
-              apiKey.style.height = `${apiKey.scrollHeight}px`;
+              apiKey.style.height = `${Math.max(apiKey.scrollHeight, minHeight)}px`;
               apiKey.style.overflowY = "hidden";
             } else {
               apiKey.style.height = `${lineHeight * maxLines}px`;
               apiKey.style.overflowY = "auto";
             }
           } else {
-            apiKey.disabled = true;
-            apiKey.classList.remove("is-revealed");
-            apiKey.style.webkitTextSecurity = "disc";
             apiKey.style.overflowY = "hidden";
-            apiKey.style.height = `${lineHeight}px`;
+            apiKey.style.height = `${minHeight}px`;
           }
         };
-        let apiKeyVisible = false;
-        adjustApiKeyTextarea();
-        toggleApiKeyButton.addEventListener("click", () => {
-          apiKeyVisible = !apiKeyVisible;
-          adjustApiKeyTextarea();
-          toggleApiKeyButton.textContent = apiKeyVisible ? "隐藏" : "显示";
-          toggleApiKeyButton.setAttribute("aria-pressed", apiKeyVisible ? "true" : "false");
+        bindSecretField(apiKeyWrap, {
+          onRevealChange: (revealed) => adjustApiKeyTextarea(revealed)
         });
         apiKey.addEventListener("input", () => {
-          if (apiKeyVisible) adjustApiKeyTextarea();
+          if (apiKeyWrap.classList.contains("is-revealed")) adjustApiKeyTextarea(true);
         });
       }
       const saveApi = document.getElementById("save-api");
@@ -8023,9 +8045,11 @@ ${error.stack}`);
                                 <label>🔗 完整路径 (URL)：
                                     <input type="text" id="api-url" placeholder="API full path (URL)">
                                 </label>
-                                <label class="api-key-label">🔑 密钥：
-                                    <button type="button" id="toggle-api-key" class="toggle-key-button" title="显示/隐藏密钥" aria-pressed="false">显示</button>
-                                    <textarea id="api-key" class="api-key-input" rows="2" placeholder="API Key" autocomplete="off" spellcheck="false"></textarea>
+                                <label class="api-key-label ld-secret-field">🔑 密钥：
+                                    <div class="ld-secret-wrap">
+                                        <textarea id="api-key" class="api-key-input ld-secret-input" rows="1" placeholder="API Key" autocomplete="off" spellcheck="false"></textarea>
+                                        <button type="button" id="toggle-api-key" class="ld-secret-toggle" data-show-label="显示密钥" data-hide-label="隐藏密钥" aria-pressed="false"></button>
+                                    </div>
                                 </label>
                                 <label>🤖 模型名：
                                     <input type="text" id="api-model" placeholder="API model name">
@@ -8236,6 +8260,8 @@ ${error.stack}`);
             --ld-input-radius: 4px;
             --ld-input-focus: var(--ld-accent, var(--d-input-focused-color, var(--highlight-color)));
             --ld-input-placeholder: var(--primary-medium, var(--message-color-active));
+            --ld-font: var(--font-0, 1em);
+            --ld-font-sm: var(--font-down-1, 0.8706em);
             --ld-btn-radius: 4px;
             --ld-btn-height: 40px;
             --button-text: #ffffff;
@@ -8627,7 +8653,8 @@ ${error.stack}`);
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
             font: inherit;
-            line-height: 1.45;
+            font-size: var(--font-0, 1em);
+            line-height: var(--line-height-large, 1.45);
             caret-color: currentcolor;
             color-scheme: inherit;
             transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
@@ -9160,7 +9187,7 @@ ${error.stack}`);
             margin-bottom: 0;
         }
         .mobile-tab-select-label {
-            font-size: 13px;
+            font-size: var(--font-0, 1em);
             font-weight: 600;
             color: var(--modal-text);
         }
@@ -9173,7 +9200,7 @@ ${error.stack}`);
             background-color: var(--ld-input-bg, var(--input-bg));
             color: var(--ld-input-fg, var(--text-color));
             font: inherit;
-            font-size: 14px;
+            font-size: var(--font-0, 1em);
             transition: border-color 0.16s ease, box-shadow 0.16s ease;
         }
         .mobile-tab-select:focus,
@@ -9830,14 +9857,14 @@ ${error.stack}`);
         #import-export-settings .import-export-section .switch-label {
             display: inline-block;
             margin-bottom: 6px;
-            font-size: 15px;
+            font-size: var(--font-0, 1em);
             font-weight: 600;
             color: var(--modal-text);
         }
         #import-export-settings .import-export-section p {
             margin-top: 0;
             margin-bottom: 14px;
-            font-size: 13px;
+            font-size: var(--font-down-1, 0.8706em);
             color: var(--message-color-active);
         }
         #import-export-settings .import-export-section .button-group {
@@ -9847,14 +9874,14 @@ ${error.stack}`);
         #drive-settings .drive-summary-section .switch-label {
             display: inline-block;
             margin-bottom: 6px;
-            font-size: 15px;
+            font-size: var(--font-0, 1em);
             font-weight: 600;
             color: var(--modal-text);
         }
         #drive-settings .drive-summary-section p {
             margin-top: 0;
             margin-bottom: 14px;
-            font-size: 13px;
+            font-size: var(--font-down-1, 0.8706em);
             color: var(--message-color-active);
         }
         #drive-settings .drive-summary-section .button-group {
@@ -9866,32 +9893,15 @@ ${error.stack}`);
             gap: 10px;
             margin-top: 8px;
         }
-        #drive-settings .drive-summary-input-wrap {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        #drive-settings .drive-summary-input-wrap input {
-            flex: 1 1 auto;
-            width: auto;
-            min-width: 0;
-            margin-bottom: 0;
-        }
-        #drive-settings .drive-summary-input-wrap .btn {
-            flex: 0 0 auto;
-            width: auto;
-            padding: 6px 10px;
-            font-size: 12px;
-        }
         #drive-settings .drive-summary-hint {
             margin: 6px 0 12px;
-            font-size: 12px;
+            font-size: var(--font-down-1, 0.8706em);
             color: var(--message-color-active);
         }
         #drive-settings .drive-summary-status {
             min-height: 18px;
             margin-top: 8px;
-            font-size: 13px;
+            font-size: var(--font-down-1, 0.8706em);
             color: var(--message-color-active);
         }
         #drive-settings .drive-summary-status.success {
@@ -9915,13 +9925,13 @@ ${error.stack}`);
         /* === 新增提示样式 === */
         .adjustment-prompt {
             margin-left: 10px;
-            font-size: 0.9em;
+            font-size: var(--font-down-1, 0.8706em);
             color: var(--message-color-active);
         }
         .adjustment-message {
             display: block;
             margin-top: 5px;
-            font-size: 0.85em;
+            font-size: var(--font-down-1, 0.8706em);
             color: var(--message-color-active);
         }
         .adjustment-message.inactive {
@@ -11297,7 +11307,7 @@ ${error.stack}`);
             min-height: 132px;
             resize: vertical;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 12px;
+            font-size: var(--font-0, 1em);
             line-height: 1.45;
         }
 
@@ -11305,7 +11315,7 @@ ${error.stack}`);
             min-height: 112px;
             resize: vertical;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 12px;
+            font-size: var(--font-0, 1em);
             line-height: 1.45;
         }
 
@@ -11859,22 +11869,7 @@ ${error.stack}`);
             box-sizing: border-box !important;
         }
 
-        /* Toggle API Key button */
-        .toggle-key-button {
-            margin-left: 8px;
-            min-width: 36px;
-            min-height: 36px;
-            padding: 4px 8px;
-            background-color: var(--secondary-button-bg);
-            color: var(--secondary-button-text);
-            border: 1px solid var(--ld-input-border, var(--border-color));
-            border-radius: var(--ld-input-radius, 4px);
-            cursor: pointer;
-        }
-        .toggle-key-button:hover {
-            background-color: var(--highlight-color);
-            color: var(--button-text);
-        }
+        /* Secret field toggle is restyled in INPUT CONTRACT below */
     `;
     style.textContent += `
 
@@ -11945,11 +11940,6 @@ ${error.stack}`);
         .api-key-input.is-revealed {
             -webkit-text-security: none;
         }
-        #drive-settings .drive-summary-input-wrap .btn,
-        #drive-settings .drive-summary-toggle {
-            min-height: 40px;
-            border-radius: var(--ld-input-radius, 4px);
-        }
         @media (max-width: 768px) {
             #settings-modal input,
             #settings-modal select,
@@ -11969,37 +11959,101 @@ ${error.stack}`);
             box-sizing: border-box !important;
         }
 
-        /* API Key label layout 20250509 */
-        /* === API KEY INPUT MULTILINE & VIEW TOGGLE FIX 20250509b === */
-        .api-key-label{
-            pointer-events:none;
+        /* === SECRET FIELD + FONT CONTRACT 20260830 v1.0.5 === */
+        #settings-modal label,
+        #settings-modal .switch-label,
+        #settings-modal .api-key-label,
+        #settings-modal .api-settings-custom-title,
+        #settings-modal .api-auto-section-title,
+        #settings-modal .mobile-tab-select-label {
+            font-size: var(--font-0, 1em);
         }
-        .api-key-label textarea,
-        .api-key-label .toggle-key-button{
-            pointer-events:auto;
+        #settings-modal .ld-secret-field {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 6px;
+            pointer-events: auto;
         }
-        .api-key-label textarea{
-            flex:1;
-            min-height:40px;
-            line-height:1.45;
-            overflow-wrap:anywhere;
-            resize:vertical;
+        #settings-modal .ld-secret-wrap {
+            display: flex;
+            align-items: stretch;
+            width: 100%;
+            min-height: 40px;
+            box-sizing: border-box;
+            background-color: var(--ld-input-bg, var(--input-bg));
+            border: 1px solid var(--ld-input-border, var(--border-color));
+            border-radius: var(--ld-input-radius, 4px);
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
         }
-        .toggle-key-button{
-            width:36px;
-            height:36px;
-            padding:0;
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
+        #settings-modal .ld-secret-wrap:hover:not(:focus-within) {
+            border-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 40%, var(--ld-input-border, var(--border-color)));
         }
-        .api-key-label{
-            display:flex;
-            align-items:center;
-            gap:6px;
+        #settings-modal .ld-secret-wrap.is-focused,
+        #settings-modal .ld-secret-wrap:focus-within {
+            border-color: var(--ld-accent, var(--d-input-focused-color, var(--highlight-color)));
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--d-input-focused-color, var(--highlight-color)));
         }
-        .api-key-label input[type="password"]{
-            flex:1;
+        #settings-modal .ld-secret-wrap .ld-secret-input,
+        #settings-modal .ld-secret-wrap input,
+        #settings-modal .ld-secret-wrap textarea {
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
+            min-height: 0;
+            margin: 0;
+            padding: 8px 10px;
+            border: 0 !important;
+            box-shadow: none !important;
+            outline: none !important;
+            background: transparent;
+            color: var(--ld-input-fg, var(--text-color));
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: var(--font-0, 1em);
+            line-height: var(--line-height-large, 1.45);
+            resize: none;
+        }
+        #settings-modal .ld-secret-wrap textarea.ld-secret-input {
+            overflow-wrap: anywhere;
+            min-height: 22px;
+        }
+        #settings-modal .ld-secret-wrap.is-revealed textarea.ld-secret-input {
+            resize: vertical;
+        }
+        #settings-modal .ld-secret-toggle {
+            flex: 0 0 40px;
+            width: 40px;
+            min-width: 40px;
+            min-height: 0;
+            margin: 0 !important;
+            padding: 0;
+            border: 0;
+            border-radius: var(--ld-input-radius, 4px);
+            background: transparent;
+            color: var(--ld-muted, var(--primary-medium, var(--message-color-active)));
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: none !important;
+        }
+        #settings-modal .ld-secret-toggle:hover,
+        #settings-modal .ld-secret-toggle:focus-visible {
+            color: var(--ld-accent, var(--highlight-color));
+            background-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 12%, transparent);
+        }
+        #settings-modal .ld-secret-toggle:focus,
+        #settings-modal .ld-secret-toggle:focus-visible {
+            outline: none;
+            box-shadow: none !important;
+        }
+        #settings-modal .ld-secret-toggle svg {
+            width: 18px;
+            height: 18px;
+            display: block;
+        }
+        #settings-modal .api-key-label {
+            pointer-events: auto;
         }
     `;
     document.head.appendChild(style);
@@ -19662,11 +19716,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.4 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.5 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.4";
+  const VERSION = "[20260830] v1.0.5";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19704,6 +19758,8 @@ ${historyText}` : "已有问答历史：暂无",
   --ld-input-radius: 4px;
   --ld-input-focus: var(--ld-accent);
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
+  --ld-font: var(--font-0, 1em);
+  --ld-font-sm: var(--font-down-1, 0.8706em);
 }
 
 html.dark #settings-modal,
@@ -19725,6 +19781,8 @@ body[data-theme="dark"] #settings-modal {
   --ld-input-radius: 4px;
   --ld-input-focus: var(--ld-accent);
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
+  --ld-font: var(--font-0, 1em);
+  --ld-font-sm: var(--font-down-1, 0.8706em);
 }
 
 #settings-modal {
@@ -19883,7 +19941,7 @@ body[data-theme="dark"] #settings-modal {
   max-width: 240px;
   padding: 8px 10px !important;
   border-radius: 8px !important;
-  font-size: 12px;
+  font-size: var(--font-down-1, 0.8706em);
   line-height: 1.45;
   text-align: left !important;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
@@ -19983,6 +20041,63 @@ body[data-theme="dark"] #settings-modal {
   #settings-modal .modal-panels {
     max-height: calc(85dvh - 5.5rem) !important;
   }
+}
+
+#settings-modal input,
+#settings-modal select,
+#settings-modal textarea,
+#settings-modal .mobile-tab-select {
+  font-size: var(--font-0, 1em);
+}
+
+#settings-modal .ld-secret-wrap {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  background: var(--ld-input-bg);
+  border: 1px solid var(--ld-input-border);
+  border-radius: var(--ld-input-radius, 4px);
+}
+
+#settings-modal .ld-secret-wrap.is-focused,
+#settings-modal .ld-secret-wrap:focus-within {
+  border-color: var(--ld-accent);
+  box-shadow: 0 0 0 2px var(--ld-accent);
+}
+
+#settings-modal .ld-secret-wrap .ld-secret-input,
+#settings-modal .ld-secret-wrap input,
+#settings-modal .ld-secret-wrap textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--font-0, 1em);
+}
+
+#settings-modal .ld-secret-toggle {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ld-muted);
+  box-shadow: none !important;
+}
+
+#settings-modal .ld-secret-toggle:hover,
+#settings-modal .ld-secret-toggle:focus-visible {
+  color: var(--ld-accent);
+  background: color-mix(in srgb, var(--ld-accent) 12%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
