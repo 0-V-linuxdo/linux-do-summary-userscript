@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.0
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.1
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.0
-// @update-log   [20260830] v1.0.0: 设置弹窗改为真正的对话框；站内确认替代原生 confirm；跟随站点色板；窄屏吸底；Toast 分层。
+// @version      [20260830] v1.0.1
+// @update-log   [20260830] v1.0.1: 设置弹窗高度跟随视口，面板内滚动；去掉标题冗余版本字。
 // @original     WhalelnColdSky
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -19424,11 +19424,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.0 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.1 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.0";
+  const VERSION = "[20260830] v1.0.1";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19498,14 +19498,16 @@ body[data-theme="dark"] #settings-modal {
 
 #settings-modal .modal-content {
   display: flex !important;
-  flex-direction: column;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
   width: min(760px, calc(100vw - 32px)) !important;
   max-width: 760px !important;
-  height: fit-content;
+  height: auto !important;
+  min-height: 0 !important;
   max-height: calc(100dvh - 24px) !important;
   margin: 0 !important;
   padding: 0 !important;
-  overflow: hidden;
+  overflow: hidden !important;
   color: var(--ld-ink) !important;
   background: var(--ld-modal) !important;
   border: 0 !important;
@@ -19528,18 +19530,30 @@ body[data-theme="dark"] #settings-modal {
 
 #settings-modal .modal-body {
   display: flex !important;
-  flex: 1 1 auto;
+  flex: 1 1 auto !important;
+  align-items: stretch !important;
   min-height: 0 !important;
   max-height: none !important;
   margin: 0 !important;
   padding: 16px 20px 20px !important;
-  overflow: hidden;
+  overflow: hidden !important;
+}
+
+#settings-modal .modal-tabs {
+  flex: 0 0 auto;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 #settings-modal .modal-panels {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
   min-height: 0 !important;
-  max-height: none !important;
   height: auto !important;
+  max-height: calc(100dvh - 8rem) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 #settings-modal .modal-header-button:hover {
@@ -19715,6 +19729,9 @@ body[data-theme="dark"] #settings-modal {
   #settings-modal .modal-body {
     flex-direction: column !important;
   }
+  #settings-modal .modal-panels {
+    max-height: calc(85dvh - 5.5rem) !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -19790,6 +19807,41 @@ body[data-theme="dark"] #settings-modal {
     }
   }
 
+  function layoutModal(modal) {
+    const content = modal.querySelector(".modal-content");
+    const header = modal.querySelector(".modal-header");
+    const body = modal.querySelector(".modal-body");
+    const panels = modal.querySelector(".modal-panels");
+    const tabs = modal.querySelector(".modal-tabs");
+    if (!content || !panels || !isModalOpen(modal)) return;
+
+    const viewport = Math.round(window.visualViewport?.height || window.innerHeight);
+    const gutter = window.innerWidth <= 720 ? 0 : 24;
+    const boxMax = Math.max(240, viewport - gutter);
+    content.style.setProperty("max-height", `${boxMax}px`, "important");
+
+    const headerH = header ? Math.ceil(header.getBoundingClientRect().height) : 56;
+    const bodyStyle = body ? getComputedStyle(body) : null;
+    const bodyChrome = bodyStyle
+      ? (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0)
+      : 36;
+    const panelsMax = Math.max(160, Math.floor(boxMax - headerH - bodyChrome));
+    panels.style.setProperty("max-height", `${panelsMax}px`, "important");
+    if (tabs) tabs.style.setProperty("max-height", `${panelsMax}px`, "important");
+  }
+
+  function bindLayout(modal) {
+    if (modal.dataset.ldLayout === "1") {
+      layoutModal(modal);
+      return;
+    }
+    modal.dataset.ldLayout = "1";
+    const run = () => layoutModal(modal);
+    window.addEventListener("resize", run);
+    window.visualViewport?.addEventListener("resize", run);
+    run();
+  }
+
   function enhanceModal(modal) {
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
@@ -19797,24 +19849,22 @@ body[data-theme="dark"] #settings-modal {
     if (title) {
       if (!title.id) title.id = "ld-settings-title";
       modal.setAttribute("aria-labelledby", title.id);
-      if (!title.dataset.ldVersioned) {
-        title.dataset.ldVersioned = "1";
-        const note = document.createElement("span");
-        note.style.cssText = "display:block;margin-top:4px;font-size:12px;font-weight:500;opacity:.72";
-        note.textContent = `弹窗优化 ${VERSION}`;
-        title.insertAdjacentElement("afterend", note);
-      }
+      title.parentElement?.querySelector(".ld-polish-version")?.remove();
     }
 
     const open = isModalOpen(modal);
     modal.classList.toggle("ld-polish-open", open);
     if (open) {
+      bindLayout(modal);
       if (!trapBound) {
         document.addEventListener("keydown", trapKey, true);
         trapBound = true;
       }
       const first = focusables(modal.querySelector(".modal-content") || modal)[0];
-      requestAnimationFrame(() => first?.focus());
+      requestAnimationFrame(() => {
+        first?.focus();
+        layoutModal(modal);
+      });
     } else if (modal.dataset.ldWasOpen === "true") {
       restoreFocus();
     }
