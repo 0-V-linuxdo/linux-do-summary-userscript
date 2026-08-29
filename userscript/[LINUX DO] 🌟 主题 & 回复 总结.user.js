@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260822] v1.1.4
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.0
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260822] v1.1.4
-// @update-log   [20260822] v1.1.4: 将「自动展开全部历史总结」改为「只展开一个总结区域」，默认开启；关闭后才可同时展开多个，并取消自动展开历史总结。
+// @version      [20260830] v1.0.0
+// @update-log   [20260830] v1.0.0: 设置弹窗改为真正的对话框；站内确认替代原生 confirm；跟随站点色板；窄屏吸底；Toast 分层。
 // @original     WhalelnColdSky
 // @match        https://linux.do/*
 // @run-at       document-end
@@ -19422,4 +19422,554 @@ ${historyText}` : "已有问答历史：暂无",
 
   // src/main.js
   bootstrapUserscriptRuntime();
+})();
+
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.0 ===== */
+(() => {
+  "use strict";
+
+  const VERSION = "[20260830] v1.0.0";
+  const STYLE_ID = "ld-popup-polish-style";
+  const CONFIRM_ID = "ld-popup-polish-confirm";
+  const DELETE_MESSAGES = {
+    "delete-prompt": "确定要删除当前提示词配置吗？",
+    "delete-question-preset": "确定要删除当前提问预设吗？",
+    "delete-api": "确定要删除当前API配置吗？",
+  };
+
+  const nativeConfirm = window.confirm.bind(window);
+  let autoConfirmYes = false;
+  let lastFocus = null;
+  let trapBound = false;
+
+  function injectStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+/* [LINUX DO] 弹窗优化 ${VERSION} */
+#settings-modal,
+#summary-toast-container,
+#settings-toast-container,
+.topic-question-preset-menu,
+.ld-polish-confirm {
+  --ld-accent: var(--tertiary, var(--highlight-color, #4a90e2));
+  --ld-modal: var(--secondary, var(--modal-bg, #ffffff));
+  --ld-ink: var(--primary, var(--modal-text, #1e242b));
+  --ld-muted: var(--primary-medium, #5c6770);
+  --ld-line: var(--primary-low, var(--border-color, #d5dbe1));
+  --ld-overlay: color-mix(in srgb, #000 56%, transparent);
+  --ld-radius: 16px;
+}
+
+html.dark #settings-modal,
+html.dark #summary-toast-container,
+html.dark #settings-toast-container,
+html.dark .topic-question-preset-menu,
+html.dark .ld-polish-confirm,
+body.dark #settings-modal,
+body[data-theme="dark"] #settings-modal {
+  --ld-accent: var(--tertiary, var(--highlight-color, #64b5f6));
+  --ld-modal: var(--secondary, var(--modal-bg, #2a2e34));
+  --ld-ink: var(--primary, var(--modal-text, #e8edf2));
+  --ld-muted: var(--primary-medium, #9aa3ad);
+  --ld-line: var(--primary-low, var(--border-color, #3d444c));
+  --ld-overlay: rgba(0, 0, 0, 0.62);
+}
+
+#settings-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1001 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  background: var(--ld-overlay) !important;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+#settings-modal.ld-polish-open {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+#settings-modal .modal-content {
+  display: flex !important;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 32px)) !important;
+  max-width: 760px !important;
+  height: fit-content;
+  max-height: calc(100dvh - 24px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  color: var(--ld-ink) !important;
+  background: var(--ld-modal) !important;
+  border: 0 !important;
+  border-radius: var(--ld-radius) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+#settings-modal .modal-header {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 16px 20px !important;
+  border-bottom: 1px solid var(--ld-line);
+  background: var(--ld-modal);
+}
+
+#settings-modal .modal-header h2 {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+#settings-modal .modal-body {
+  display: flex !important;
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 16px 20px 20px !important;
+  overflow: hidden;
+}
+
+#settings-modal .modal-panels {
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+}
+
+#settings-modal .modal-header-button:hover {
+  background: color-mix(in srgb, var(--ld-accent) 16%, transparent);
+}
+
+#settings-modal #close-settings {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+#settings-modal #close-settings:hover {
+  background: color-mix(in srgb, var(--ld-accent) 16%, transparent);
+}
+
+#settings-modal #close-settings:focus-visible,
+#settings-modal .modal-header-button:focus-visible,
+#settings-modal .tab-button:focus-visible,
+#settings-modal .btn:focus-visible {
+  outline: 2px solid var(--ld-accent);
+  outline-offset: 2px;
+}
+
+.summary-toast {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #fff 22%, transparent);
+  border-radius: 12px !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.summary-toast::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.summary-toast.warning {
+  color: #2a2108 !important;
+}
+.summary-toast.warning::before {
+  background: #2a2108;
+}
+
+#settings-toast-container {
+  z-index: 10002 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#settings-toast-container .settings-toast,
+#settings-toast-container .summary-toast {
+  pointer-events: auto;
+  border-radius: 12px !important;
+}
+
+.topic-question-preset-menu {
+  z-index: 1100 !important;
+  max-width: min(320px, calc(100vw - 24px));
+  background: var(--ld-modal) !important;
+  border-color: var(--ld-line) !important;
+  border-radius: 12px !important;
+}
+
+.switch-container .tooltip {
+  z-index: 10050 !important;
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 10px !important;
+  border-radius: 8px !important;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.ld-polish-confirm-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1010;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--ld-overlay, rgba(0, 0, 0, 0.62));
+  backdrop-filter: blur(2px);
+}
+
+.ld-polish-confirm-root[data-open="true"] {
+  display: flex;
+}
+
+.ld-polish-confirm {
+  width: min(420px, calc(100vw - 32px));
+  overflow: hidden;
+  color: var(--ld-ink, #e8edf2);
+  background: var(--ld-modal, #2a2e34);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+
+.ld-polish-confirm header,
+.ld-polish-confirm footer {
+  padding: 16px 20px;
+}
+
+.ld-polish-confirm header {
+  border-bottom: 1px solid var(--ld-line, #3d444c);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ld-polish-confirm p {
+  margin: 0;
+  padding: 16px 20px;
+  color: var(--ld-muted, #9aa3ad);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.ld-polish-confirm footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--ld-line, #3d444c);
+}
+
+.ld-polish-confirm button {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ld-polish-cancel {
+  color: var(--ld-ink, #e8edf2);
+  background: color-mix(in srgb, var(--ld-ink, #e8edf2) 8%, transparent);
+}
+
+.ld-polish-ok {
+  color: #fff6f5;
+  background: #d95a4f;
+}
+
+.ld-polish-confirm button:focus-visible {
+  outline: 2px solid var(--ld-accent, #64b5f6);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  #settings-modal.ld-polish-open {
+    align-items: flex-end;
+    padding: 0;
+  }
+  #settings-modal .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 85dvh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+  #settings-modal .modal-body {
+    flex-direction: column !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #settings-modal,
+  #settings-modal .modal-content,
+  .summary-toast,
+  .settings-toast,
+  .ld-polish-confirm-root {
+    backdrop-filter: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+`;
+    document.documentElement.appendChild(style);
+  }
+
+  function isModalOpen(modal) {
+    if (!modal) return false;
+    const inline = modal.style.display;
+    if (inline === "none") return false;
+    if (inline && inline !== "") return true;
+    return getComputedStyle(modal).display !== "none";
+  }
+
+  function focusables(root) {
+    return [...root.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((el) => el.offsetParent !== null || el.getClientRects().length);
+  }
+
+  function trapKey(event) {
+    const modal = document.getElementById("settings-modal");
+    if (!modal || !modal.classList.contains("ld-polish-open")) return;
+    if (document.getElementById(CONFIRM_ID)?.dataset.open === "true") return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeModal(modal);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const items = focusables(modal.querySelector(".modal-content") || modal);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function closeModal(modal) {
+    const closeBtn = document.getElementById("close-settings");
+    if (closeBtn) {
+      closeBtn.click();
+      return;
+    }
+    modal.style.display = "none";
+    document.documentElement.classList.remove("settings-modal-open");
+    document.body.classList.remove("settings-modal-open");
+    restoreFocus();
+  }
+
+  function restoreFocus() {
+    const target = lastFocus || document.getElementById("settings-button");
+    if (target && typeof target.focus === "function") {
+      requestAnimationFrame(() => target.focus());
+    }
+  }
+
+  function enhanceModal(modal) {
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    const title = modal.querySelector(".modal-header h2");
+    if (title) {
+      if (!title.id) title.id = "ld-settings-title";
+      modal.setAttribute("aria-labelledby", title.id);
+      if (!title.dataset.ldVersioned) {
+        title.dataset.ldVersioned = "1";
+        const note = document.createElement("span");
+        note.style.cssText = "display:block;margin-top:4px;font-size:12px;font-weight:500;opacity:.72";
+        note.textContent = `弹窗优化 ${VERSION}`;
+        title.insertAdjacentElement("afterend", note);
+      }
+    }
+
+    const open = isModalOpen(modal);
+    modal.classList.toggle("ld-polish-open", open);
+    if (open) {
+      if (!trapBound) {
+        document.addEventListener("keydown", trapKey, true);
+        trapBound = true;
+      }
+      const first = focusables(modal.querySelector(".modal-content") || modal)[0];
+      requestAnimationFrame(() => first?.focus());
+    } else if (modal.dataset.ldWasOpen === "true") {
+      restoreFocus();
+    }
+    modal.dataset.ldWasOpen = open ? "true" : "false";
+  }
+
+  function watchModal() {
+    const attach = (modal) => {
+      if (modal.dataset.ldPolish === "1") {
+        enhanceModal(modal);
+        return;
+      }
+      modal.dataset.ldPolish = "1";
+      modal.addEventListener("mousedown", (event) => {
+        if (event.target === modal) closeModal(modal);
+      });
+      enhanceModal(modal);
+      new MutationObserver(() => enhanceModal(modal)).observe(modal, {
+        attributes: true,
+        attributeFilter: ["style", "class"],
+      });
+    };
+
+    const existing = document.getElementById("settings-modal");
+    if (existing) attach(existing);
+
+    new MutationObserver(() => {
+      const modal = document.getElementById("settings-modal");
+      if (modal) attach(modal);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function rememberFocus() {
+    document.addEventListener(
+      "click",
+      (event) => {
+        const trigger = event.target.closest?.("#settings-button, [id$='settings-button']");
+        if (trigger) lastFocus = trigger;
+      },
+      true,
+    );
+  }
+
+  function ensureConfirmUi() {
+    let root = document.getElementById(CONFIRM_ID);
+    if (root) return root;
+    root = document.createElement("div");
+    root.id = CONFIRM_ID;
+    root.className = "ld-polish-confirm-root";
+    root.innerHTML = `
+      <div class="ld-polish-confirm" role="alertdialog" aria-modal="true" aria-labelledby="ld-polish-confirm-title" aria-describedby="ld-polish-confirm-desc">
+        <header id="ld-polish-confirm-title">确认删除</header>
+        <p id="ld-polish-confirm-desc"></p>
+        <footer>
+          <button type="button" class="ld-polish-cancel">取消</button>
+          <button type="button" class="ld-polish-ok">删除</button>
+        </footer>
+      </div>`;
+    document.body.appendChild(root);
+    return root;
+  }
+
+  function askConfirm(message) {
+    return new Promise((resolve) => {
+      const root = ensureConfirmUi();
+      const desc = root.querySelector("#ld-polish-confirm-desc");
+      const cancel = root.querySelector(".ld-polish-cancel");
+      const ok = root.querySelector(".ld-polish-ok");
+      desc.textContent = message;
+      root.dataset.open = "true";
+      const finish = (value) => {
+        root.dataset.open = "false";
+        cancel.removeEventListener("click", onCancel);
+        ok.removeEventListener("click", onOk);
+        root.removeEventListener("mousedown", onBackdrop);
+        document.removeEventListener("keydown", onKey, true);
+        resolve(value);
+      };
+      const onCancel = () => finish(false);
+      const onOk = () => finish(true);
+      const onBackdrop = (event) => {
+        if (event.target === root) finish(false);
+      };
+      const onKey = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          finish(false);
+        }
+      };
+      cancel.addEventListener("click", onCancel);
+      ok.addEventListener("click", onOk);
+      root.addEventListener("mousedown", onBackdrop);
+      document.addEventListener("keydown", onKey, true);
+      requestAnimationFrame(() => cancel.focus());
+    });
+  }
+
+  function interceptConfirms() {
+    const replaying = new WeakSet();
+    document.addEventListener(
+      "click",
+      (event) => {
+        const btn = event.target.closest?.("#delete-prompt, #delete-api, #delete-question-preset");
+        if (!btn || replaying.has(btn)) return;
+        const message = DELETE_MESSAGES[btn.id];
+        if (!message) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        askConfirm(message).then((ok) => {
+          if (!ok) return;
+          autoConfirmYes = true;
+          replaying.add(btn);
+          btn.click();
+          replaying.delete(btn);
+          autoConfirmYes = false;
+        });
+      },
+      true,
+    );
+
+    window.confirm = function patchedConfirm(message) {
+      if (autoConfirmYes) return true;
+      return nativeConfirm(message);
+    };
+  }
+
+  function clampSettingsToasts() {
+    const place = () => {
+      const container = document.getElementById("settings-toast-container");
+      const modal = document.querySelector("#settings-modal .modal-content");
+      if (!container || !modal || !isModalOpen(document.getElementById("settings-modal"))) return;
+      const rect = modal.getBoundingClientRect();
+      const top = Math.min(rect.bottom + 10, window.innerHeight - 80);
+      container.style.top = `${Math.max(12, top)}px`;
+      container.style.left = `${rect.left + rect.width / 2}px`;
+      container.style.right = "auto";
+      container.style.bottom = "auto";
+      container.style.transform = "translateX(-50%)";
+    };
+    window.addEventListener("resize", place);
+    new MutationObserver(place).observe(document.body, { childList: true, subtree: true });
+  }
+
+  function markTooltips() {
+    document.querySelectorAll("#settings-modal .tooltip").forEach((el) => {
+      el.setAttribute("role", "tooltip");
+    });
+  }
+
+  injectStyle();
+  rememberFocus();
+  watchModal();
+  interceptConfirms();
+  clampSettingsToasts();
+  markTooltips();
+  document.documentElement.dataset.ldPopupPolish = VERSION;
 })();
