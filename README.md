@@ -2,13 +2,13 @@
 
 给 Linux.do 用户用的浏览器脚本：在话题页和列表页一键生成结构化总结，也可以围绕当前话题继续提问、回看历史记录，并按需同步到 Google Drive。
 
-当前版本：**[20260830] v1.0.11**
+当前版本：**[20260830] v1.0.12**
 
 ## 安装
 
 1. 先安装一个用户脚本管理器，例如 Violentmonkey 或 Tampermonkey。
 2. 点击安装脚本：
-   [安装最新版 [20260830] v1.0.11](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
+   [安装最新版 [20260830] v1.0.12](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
 3. 打开 `https://linux.do/`，进入任意话题页。
 4. 点击侧边栏里的 `🛠️` 设置按钮，填写你的 API 地址、API Key 和模型名。
 
@@ -33,6 +33,7 @@
 - 分组选中：[20260830] v1.0.8 起选中 tab 沿用原来的填充底色，去掉 accent 描边和混色，避免看起来像一层厚焦点环。
 - DeArrow 设置：[20260830] v1.0.9 起拆成「自动 / 提示词 / 模型与范围」三个子 tab；v1.0.10 将原「开关」改名为「自动」，避免语意不清。
 - API 配置：[20260830] v1.0.11 起图片设置默认折叠，并增加「复制」按钮，可一键复制当前 AI 配置。
+- 子 tab 对比：[20260830] v1.0.12 起当前子 tab 改为实色填充，未选中子 tab 降低对比，在着色面板上也能一眼分清。
 
 ## 使用方式
 

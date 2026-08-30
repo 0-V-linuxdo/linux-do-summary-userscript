@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.11
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.12
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.11
+// @version      [20260830] v1.0.12
+// @update-log   [20260830] v1.0.12: 提高当前子 tab 与其他子 tab 的对比度；选中用实色填充，未选中改弱对比。
 // @update-log   [20260830] v1.0.11: API 配置增加复制按钮；图片设置默认折叠。
 // @update-log   [20260830] v1.0.10: DeArrow 子 tab「开关」改为「自动」。
 // @update-log   [20260830] v1.0.9: DeArrow 设置拆成开关 / 提示词 / 模型与范围 三个子 tab。
@@ -9480,11 +9481,11 @@ ${error.stack}`);
             padding: 8px 14px;
             border-radius: var(--ld-btn-radius, 4px);
             border: 1px solid transparent;
-            background-color: var(--secondary-button-bg);
-            color: var(--secondary-button-text);
+            background-color: color-mix(in srgb, var(--text-color) 10%, transparent);
+            color: var(--message-color-active, var(--secondary-button-text));
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+            transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
         }
         .api-sub-tab-button:focus,
         .sidebar-sub-tab-button:focus,
@@ -9508,8 +9509,10 @@ ${error.stack}`);
         .sidebar-sub-tab-button:hover,
         .list-summary-sub-tab-button:hover,
         .dearrow-sub-tab-button:hover,
-        .prompt-sub-tab-button:hover {
-            background-color: var(--tab-hover-bg);
+        .prompt-sub-tab-button:hover,
+        .toast-sub-tab-button:hover {
+            background-color: color-mix(in srgb, var(--text-color) 16%, transparent);
+            color: var(--text-color);
             transform: translateY(-1px);
         }
         .api-sub-tab-button.active,
@@ -9517,8 +9520,14 @@ ${error.stack}`);
         .list-summary-sub-tab-button.active,
         .dearrow-sub-tab-button.active,
         .prompt-sub-tab-button.active,
-        .toast-sub-tab-button.active {
-            background-color: var(--tab-active-bg);
+        .toast-sub-tab-button.active,
+        .api-sub-tab-button.active:hover,
+        .sidebar-sub-tab-button.active:hover,
+        .list-summary-sub-tab-button.active:hover,
+        .dearrow-sub-tab-button.active:hover,
+        .prompt-sub-tab-button.active:hover,
+        .toast-sub-tab-button.active:hover {
+            background-color: color-mix(in srgb, var(--ld-accent, var(--highlight-color)) 48%, var(--modal-bg));
             border-color: transparent;
             color: var(--text-color);
         }
@@ -19948,11 +19957,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.11 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.12 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.11";
+  const VERSION = "[20260830] v1.0.12";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19992,6 +20001,9 @@ ${historyText}` : "已有问答历史：暂无",
   --ld-input-placeholder: var(--primary-medium, var(--ld-muted));
   --ld-font: var(--font-0, 1em);
   --ld-font-sm: var(--font-down-1, 0.8706em);
+  --ld-subtab-idle-bg: color-mix(in srgb, var(--ld-ink) 10%, transparent);
+  --ld-subtab-hover-bg: color-mix(in srgb, var(--ld-ink) 18%, transparent);
+  --ld-subtab-active-bg: color-mix(in srgb, var(--ld-accent) 48%, var(--ld-modal));
 }
 
 html.dark #settings-modal,
@@ -20156,14 +20168,47 @@ body[data-theme="dark"] #settings-modal {
   box-shadow: 0 0 0 2px var(--ld-accent);
 }
 
-#settings-modal .tab-button.active,
+#settings-modal .tab-button.active {
+  background: var(--tab-active-bg);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+#settings-modal .api-sub-tab-button,
+#settings-modal .sidebar-sub-tab-button,
+#settings-modal .list-summary-sub-tab-button,
+#settings-modal .dearrow-sub-tab-button,
+#settings-modal .prompt-sub-tab-button,
+#settings-modal .toast-sub-tab-button {
+  background: var(--ld-subtab-idle-bg);
+  color: var(--ld-muted);
+  border-color: transparent;
+}
+
+#settings-modal .api-sub-tab-button:hover,
+#settings-modal .sidebar-sub-tab-button:hover,
+#settings-modal .list-summary-sub-tab-button:hover,
+#settings-modal .dearrow-sub-tab-button:hover,
+#settings-modal .prompt-sub-tab-button:hover,
+#settings-modal .toast-sub-tab-button:hover {
+  background: var(--ld-subtab-hover-bg);
+  color: var(--ld-ink);
+}
+
 #settings-modal .api-sub-tab-button.active,
 #settings-modal .sidebar-sub-tab-button.active,
 #settings-modal .list-summary-sub-tab-button.active,
 #settings-modal .dearrow-sub-tab-button.active,
 #settings-modal .prompt-sub-tab-button.active,
-#settings-modal .toast-sub-tab-button.active {
-  background: var(--tab-active-bg);
+#settings-modal .toast-sub-tab-button.active,
+#settings-modal .api-sub-tab-button.active:hover,
+#settings-modal .sidebar-sub-tab-button.active:hover,
+#settings-modal .list-summary-sub-tab-button.active:hover,
+#settings-modal .dearrow-sub-tab-button.active:hover,
+#settings-modal .prompt-sub-tab-button.active:hover,
+#settings-modal .toast-sub-tab-button.active:hover {
+  background: var(--ld-subtab-active-bg);
+  color: var(--ld-ink);
   border-color: transparent;
   box-shadow: none;
 }
