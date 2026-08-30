@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.13
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.14
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.13
+// @version      [20260830] v1.0.14
+// @update-log   [20260830] v1.0.14: 切左侧 tab 不再整窗重排，去掉 hover 位移，切换更跟手。
 // @update-log   [20260830] v1.0.13: 设置弹窗标题栏垂直对齐；折叠侧栏图标改为正文色，不再用蓝色。
 // @update-log   [20260830] v1.0.12: 提高当前子 tab 与其他子 tab 的对比度；选中用实色填充，未选中改弱对比。
 // @update-log   [20260830] v1.0.11: API 配置增加复制按钮；图片设置默认折叠。
@@ -6179,6 +6180,7 @@ ${error.stack}`);
       if (tabButtons && tabContents) {
         tabButtons.forEach((button) => {
           button.addEventListener("click", () => {
+            if (button.classList.contains("active")) return;
             const tabId = button.getAttribute("data-tab");
             tabButtons.forEach((btn) => btn.classList.remove("active"));
             tabContents.forEach((content) => content.classList.remove("active"));
@@ -6194,6 +6196,7 @@ ${error.stack}`);
       if (sidebarSubTabButtons.length && sidebarSubTabContents.length) {
         sidebarSubTabButtons.forEach((button) => {
           button.addEventListener("click", () => {
+            if (button.classList.contains("active")) return;
             const targetId = button.getAttribute("data-sidebar-tab");
             sidebarSubTabButtons.forEach((btn) => btn.classList.remove("active"));
             sidebarSubTabContents.forEach((content) => content.classList.remove("active"));
@@ -6215,6 +6218,7 @@ ${error.stack}`);
       if (promptSubTabButtons.length && promptSubTabContents.length) {
         promptSubTabButtons.forEach((button) => {
           button.addEventListener("click", () => {
+            if (button.classList.contains("active")) return;
             const targetId = button.getAttribute("data-prompt-tab");
             promptSubTabButtons.forEach((btn) => btn.classList.remove("active"));
             promptSubTabContents.forEach((content) => content.classList.remove("active"));
@@ -6229,6 +6233,7 @@ ${error.stack}`);
       if (apiSubTabButtons.length && apiSubTabContents.length) {
         apiSubTabButtons.forEach((button) => {
           button.addEventListener("click", () => {
+            if (button.classList.contains("active")) return;
             const targetId = button.getAttribute("data-api-tab");
             apiSubTabButtons.forEach((btn) => btn.classList.remove("active"));
             apiSubTabContents.forEach((content) => content.classList.remove("active"));
@@ -6243,6 +6248,7 @@ ${error.stack}`);
       if (listSummarySubTabButtons.length && listSummarySubTabContents.length) {
         listSummarySubTabButtons.forEach((button) => {
           button.addEventListener("click", () => {
+            if (button.classList.contains("active")) return;
             const targetId = button.getAttribute("data-list-summary-tab");
             listSummarySubTabButtons.forEach((btn) => btn.classList.remove("active"));
             listSummarySubTabContents.forEach((content) => content.classList.remove("active"));
@@ -6257,6 +6263,7 @@ ${error.stack}`);
       if (dearrowSubTabButtons.length && dearrowSubTabContents.length) {
         dearrowSubTabButtons.forEach((button) => {
           button.addEventListener("click", () => {
+            if (button.classList.contains("active")) return;
             const targetId = button.getAttribute("data-dearrow-tab");
             dearrowSubTabButtons.forEach((btn) => btn.classList.remove("active"));
             dearrowSubTabContents.forEach((content) => content.classList.remove("active"));
@@ -7779,6 +7786,7 @@ ${error.stack}`);
       const toastSubTabContents = toastSettingsTab.querySelectorAll(".toast-sub-tab-content");
       toastSubTabButtons.forEach((button) => {
         button.addEventListener("click", () => {
+          if (button.classList.contains("active")) return;
           const targetId = button.getAttribute("data-toast-tab");
           toastSubTabButtons.forEach((btn) => btn.classList.remove("active"));
           toastSubTabContents.forEach((content) => content.classList.remove("active"));
@@ -9307,14 +9315,14 @@ ${error.stack}`);
             border: 1px solid transparent;
             border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            transition: background-color 0.15s ease, color 0.15s ease;
             color: var(--text-color);
             text-align: center;
             white-space: nowrap;
+            transform: none;
         }
         #settings-modal .tab-button:hover {
             background-color: var(--tab-hover-bg);
-            transform: translateY(-1px);
         }
         #settings-modal .tab-button:focus {
             outline: none;
@@ -19985,11 +19993,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.13 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.14 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.13";
+  const VERSION = "[20260830] v1.0.14";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -20157,6 +20165,20 @@ body[data-theme="dark"] #settings-modal {
   max-height: none !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
+  contain: layout paint;
+}
+
+#settings-modal .tab-content {
+  contain: layout paint;
+}
+
+#settings-modal .tab-button {
+  transform: none !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+
+#settings-modal .tab-button:hover {
+  transform: none !important;
 }
 
 #settings-modal .modal-header-button,
@@ -20612,10 +20634,19 @@ body[data-theme="dark"] #settings-modal {
     }
   }
 
+  let layoutRaf = 0;
+
+  function scheduleLayout(modal) {
+    if (layoutRaf) return;
+    layoutRaf = requestAnimationFrame(() => {
+      layoutRaf = 0;
+      layoutModal(modal);
+    });
+  }
+
   function layoutModal(modal) {
     const content = modal.querySelector(".modal-content");
     const header = modal.querySelector(".modal-header");
-    const body = modal.querySelector(".modal-body");
     const panels = modal.querySelector(".modal-panels");
     const tabs = modal.querySelector(".modal-tabs");
     if (!content || !panels || !isModalOpen(modal)) return;
@@ -20625,16 +20656,16 @@ body[data-theme="dark"] #settings-modal {
     const gutter = mobile ? 0 : 24;
     const boxMax = Math.max(240, viewport - gutter);
     const shellH = Math.max(240, Math.min(Math.round(viewport * (mobile ? 0.85 : 0.7)), boxMax));
+    const headerH = header ? Math.ceil(header.getBoundingClientRect().height) || 52 : 52;
+    const bodyChrome = 36;
+    const panelsMax = Math.max(160, Math.floor(shellH - headerH - bodyChrome));
+    const key = `${shellH}|${boxMax}|${panelsMax}`;
+    if (modal.dataset.ldLayoutKey === key) return;
+    modal.dataset.ldLayoutKey = key;
+
     content.style.setProperty("height", `${shellH}px`, "important");
     content.style.setProperty("min-height", `${shellH}px`, "important");
     content.style.setProperty("max-height", `${boxMax}px`, "important");
-
-    const headerH = header ? Math.ceil(header.getBoundingClientRect().height) : 56;
-    const bodyStyle = body ? getComputedStyle(body) : null;
-    const bodyChrome = bodyStyle
-      ? (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0)
-      : 36;
-    const panelsMax = Math.max(160, Math.floor(shellH - headerH - bodyChrome));
     panels.style.setProperty("height", `${panelsMax}px`, "important");
     panels.style.setProperty("min-height", "0px", "important");
     panels.style.setProperty("max-height", `${panelsMax}px`, "important");
@@ -20642,15 +20673,18 @@ body[data-theme="dark"] #settings-modal {
   }
 
   function bindLayout(modal) {
+    const onResize = () => {
+      delete modal.dataset.ldLayoutKey;
+      scheduleLayout(modal);
+    };
     if (modal.dataset.ldLayout === "1") {
-      layoutModal(modal);
+      scheduleLayout(modal);
       return;
     }
     modal.dataset.ldLayout = "1";
-    const run = () => layoutModal(modal);
-    window.addEventListener("resize", run);
-    window.visualViewport?.addEventListener("resize", run);
-    run();
+    window.addEventListener("resize", onResize, { passive: true });
+    window.visualViewport?.addEventListener("resize", onResize, { passive: true });
+    scheduleLayout(modal);
   }
 
   function enhanceModal(modal) {
@@ -20672,10 +20706,13 @@ body[data-theme="dark"] #settings-modal {
         document.addEventListener("keydown", trapKey, true);
         trapBound = true;
       }
-      requestAnimationFrame(() => {
-        if (!wasOpen) focusDialogShell(modal);
-        layoutModal(modal);
-      });
+      if (!wasOpen) {
+        requestAnimationFrame(() => {
+          focusDialogShell(modal);
+          delete modal.dataset.ldLayoutKey;
+          layoutModal(modal);
+        });
+      }
     } else if (wasOpen) {
       restoreFocus();
     }
@@ -20684,21 +20721,11 @@ body[data-theme="dark"] #settings-modal {
 
   function watchModal() {
     const attach = (modal) => {
-      if (modal.dataset.ldPolish === "1") {
-        enhanceModal(modal);
-        return;
-      }
+      if (modal.dataset.ldPolish === "1") return;
       modal.dataset.ldPolish = "1";
       modal.addEventListener("mousedown", (event) => {
         if (event.target === modal) closeModal(modal);
       });
-      modal.addEventListener("click", (event) => {
-        if (event.target.closest?.(".tab-button, .sidebar-sub-tab-button, .prompt-sub-tab-button, .api-sub-tab-button, .list-summary-sub-tab-button, .dearrow-sub-tab-button, .toast-sub-tab-button, .mobile-tab-select, #mobile-tab-select, #toggle-tabs-button")) {
-          requestAnimationFrame(() => layoutModal(modal));
-        }
-      });
-      const mobileSelect = modal.querySelector("#mobile-tab-select");
-      mobileSelect?.addEventListener("change", () => requestAnimationFrame(() => layoutModal(modal)));
       enhanceModal(modal);
       new MutationObserver(() => enhanceModal(modal)).observe(modal, {
         attributes: true,
@@ -20709,9 +20736,14 @@ body[data-theme="dark"] #settings-modal {
     const existing = document.getElementById("settings-modal");
     if (existing) attach(existing);
 
-    new MutationObserver(() => {
-      const modal = document.getElementById("settings-modal");
-      if (modal) attach(modal);
+    new MutationObserver((records) => {
+      for (const rec of records) {
+        for (const node of rec.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          const found = node.id === "settings-modal" ? node : node.querySelector?.("#settings-modal");
+          if (found) attach(found);
+        }
+      }
     }).observe(document.documentElement, { childList: true, subtree: true });
   }
 
@@ -20823,8 +20855,17 @@ body[data-theme="dark"] #settings-modal {
       container.style.bottom = "auto";
       container.style.transform = "translateX(-50%)";
     };
-    window.addEventListener("resize", place);
-    new MutationObserver(place).observe(document.body, { childList: true, subtree: true });
+    let toastRaf = 0;
+    const schedulePlace = () => {
+      if (toastRaf) return;
+      toastRaf = requestAnimationFrame(() => {
+        toastRaf = 0;
+        place();
+      });
+    };
+    window.addEventListener("resize", schedulePlace, { passive: true });
+    const toastRoot = document.getElementById("settings-toast-container") || document.body;
+    new MutationObserver(schedulePlace).observe(toastRoot, { childList: true });
   }
 
   function markTooltips() {
