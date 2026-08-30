@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.10
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.11
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.10
+// @version      [20260830] v1.0.11
+// @update-log   [20260830] v1.0.11: API 配置增加复制按钮；图片设置默认折叠。
 // @update-log   [20260830] v1.0.10: DeArrow 子 tab「开关」改为「自动」。
 // @update-log   [20260830] v1.0.9: DeArrow 设置拆成开关 / 提示词 / 模型与范围 三个子 tab。
 // @update-log   [20260830] v1.0.8: 选中 tab 沿用原填充底色，去掉 accent 混色与描边；焦点环只给键盘。
@@ -5925,6 +5926,14 @@ ${error.stack}`);
         settingsModal.style.display = "block";
         lockBodyScroll();
       }
+      const imageSettingsPanel = document.getElementById("api-image-settings");
+      const imageSettingsToggle = document.getElementById("toggle-api-image-settings");
+      if (imageSettingsPanel) imageSettingsPanel.classList.add("is-collapsed");
+      if (imageSettingsToggle) {
+        imageSettingsToggle.setAttribute("aria-expanded", "false");
+        imageSettingsToggle.setAttribute("title", "展开图片设置");
+        imageSettingsToggle.setAttribute("aria-label", "展开图片设置");
+      }
       updatePromptSelect();
       updateQuestionPresetSelect();
       updateSummaryFilterInputs();
@@ -6013,8 +6022,32 @@ ${error.stack}`);
         });
       }
       const saveApi = document.getElementById("save-api");
+      const copyApi = document.getElementById("copy-api");
       const deleteApi = document.getElementById("delete-api");
       const addApi = document.getElementById("add-api");
+      const apiImageSettings = document.getElementById("api-image-settings");
+      const toggleApiImageSettings = document.getElementById("toggle-api-image-settings");
+      const setApiImageSettingsCollapsed = (collapsed) => {
+        if (apiImageSettings) {
+          apiImageSettings.classList.toggle("is-collapsed", collapsed);
+        }
+        if (toggleApiImageSettings) {
+          toggleApiImageSettings.setAttribute("aria-expanded", collapsed ? "false" : "true");
+          toggleApiImageSettings.setAttribute("title", collapsed ? "展开图片设置" : "折叠图片设置");
+          toggleApiImageSettings.setAttribute("aria-label", collapsed ? "展开图片设置" : "折叠图片设置");
+        }
+      };
+      const uniqueApiCopyName = (baseName) => {
+        const names = new Set(
+          (state2.apiConfigurations || []).map((config) => String(config?.name || "").trim()).filter(Boolean)
+        );
+        const stem = String(baseName || "新API配置").trim().replace(/\s*副本(?:\s+\d+)?$/, "").trim() || "新API配置";
+        const first = `${stem} 副本`;
+        if (!names.has(first)) return first;
+        let index = 2;
+        while (names.has(`${stem} 副本 ${index}`)) index += 1;
+        return `${stem} 副本 ${index}`;
+      };
       const populateMobileTabSelect = () => {
         if (!mobileTabSelect || !tabButtons.length) return;
         mobileTabSelect.innerHTML = "";
@@ -6786,6 +6819,23 @@ ${error.stack}`);
           syncApiImageOptionsState();
         });
       }
+      if (toggleApiImageSettings) {
+        const toggleImageSettingsFold = () => {
+          const collapsed = !(apiImageSettings?.classList.contains("is-collapsed"));
+          setApiImageSettingsCollapsed(collapsed);
+        };
+        toggleApiImageSettings.addEventListener("click", (event) => {
+          event.preventDefault();
+          toggleImageSettingsFold();
+        });
+        const apiImageHeading = apiImageSettings?.querySelector(".api-image-settings-heading");
+        if (apiImageHeading) {
+          apiImageHeading.addEventListener("click", (event) => {
+            if (event.target.closest("#toggle-api-image-settings")) return;
+            toggleImageSettingsFold();
+          });
+        }
+      }
       if (saveApi) {
         saveApi.addEventListener("click", () => {
           if (!apiName || !apiUrl || !apiKey || !apiModel || !newTopicAutoSummarizeCheckbox || !autoRetryCountInput || !autoRetryIntervalInput) return;
@@ -6856,6 +6906,30 @@ ${error.stack}`);
           persistApiConfigurations2?.();
           updateApiSelect();
           createSettingsToast2("新API配置已添加！", "info", 3e3);
+        });
+      }
+      if (copyApi) {
+        copyApi.addEventListener("click", () => {
+          const currentConfig = getCurrentApiConfiguration2() || {};
+          const sourceName = apiName?.value.trim() || currentConfig.name || "新API配置";
+          const copied = normalizeApiConfiguration2({
+            name: uniqueApiCopyName(sourceName),
+            url: apiUrl?.value.trim() || currentConfig.url,
+            key: apiKey?.value.trim() || currentConfig.key,
+            model: apiModel?.value.trim() || currentConfig.model,
+            retryCount: currentConfig.retryCount,
+            retryInterval: currentConfig.retryInterval,
+            imageInputEnabled: apiImageInputEnabled?.checked === true,
+            imageDetail: apiImageDetail?.value || currentConfig.imageDetail || "auto",
+            maxImagesPerRequest: apiMaxImages?.value || currentConfig.maxImagesPerRequest || 6,
+            maxImageBytes: mbInputToBytes(apiMaxImageMb?.value, currentConfig.maxImageBytes || 4 * 1024 * 1024),
+            maxTotalImageBytes: mbInputToBytes(apiMaxTotalImageMb?.value, currentConfig.maxTotalImageBytes || 12 * 1024 * 1024)
+          }, currentConfig);
+          state2.apiConfigurations.push(copied);
+          state2.currentApiIndex = state2.apiConfigurations.length - 1;
+          persistApiConfigurations2?.();
+          updateApiSelect();
+          createSettingsToast2(`已复制为「${copied.name}」`, "success", 3e3);
         });
       }
       if (defaultOpenSidebarSwitch) {
@@ -8073,14 +8147,19 @@ ${error.stack}`);
                                 <label>🤖 模型名：
                                     <input type="text" id="api-model" placeholder="API model name">
                                 </label>
-                                <div class="api-image-settings">
-                                    <div class="switch-container">
-                                        <span class="switch-label">🖼️ 图片输入（关/开）</span>
+                                <div class="api-image-settings is-collapsed" id="api-image-settings">
+                                    <div class="switch-container api-image-settings-header">
+                                        <span class="api-image-settings-heading">
+                                            <button type="button" id="toggle-api-image-settings" class="api-image-fold" aria-expanded="false" title="展开图片设置" aria-label="展开图片设置">
+                                                <span class="api-image-fold-icon" aria-hidden="true"></span>
+                                            </button>
+                                            <span class="switch-label">🖼️ 图片输入（关/开）</span>
+                                        </span>
                                         <label class="switch switch-on-off">
                                             <input type="checkbox" id="api-image-input-enabled">
                                             <span class="slider"></span>
                                         </label>
-                                        <span class="tooltip">启用后，该 API 配置会把话题图片随请求发送给支持视觉输入的模型。</span>
+                                        <span class="tooltip">启用后，该 API 配置会把话题图片随请求发送给支持视觉输入的模型。点击左侧箭头展开清晰度与体积上限。</span>
                                     </div>
                                     <div id="api-image-options" class="api-image-options">
                                         <label>图片清晰度：
@@ -8105,6 +8184,7 @@ ${error.stack}`);
                             <div class="api-settings-action-bar">
                                 <div class="button-group">
                                     <button id="save-api" class="custom-button btn btn-icon-text btn-primary save-button"><span class="button-icon d-icon" aria-hidden="true">💾</span><span class="button-label d-button-label">保存</span></button>
+                                    <button id="copy-api" class="custom-button btn btn-icon-text btn-copy copy-button"><span class="button-icon d-icon" aria-hidden="true">📋</span><span class="button-label d-button-label">复制</span></button>
                                     <button id="delete-api" class="custom-button btn btn-icon-text btn-danger delete-button"><span class="button-icon d-icon" aria-hidden="true">🗑️</span><span class="button-label d-button-label">删除</span></button>
                                     <button id="add-api" class="custom-button btn btn-icon-text btn-success add-button"><span class="button-icon d-icon" aria-hidden="true">✍️</span><span class="button-label d-button-label">添加</span></button>
                                 </div>
@@ -8363,6 +8443,10 @@ ${error.stack}`);
             --btn-danger-bg: #d04437;
             --btn-danger-hover: #b93a2f;
             --btn-danger-active: #a5332a;
+            --btn-copy-bg: #e6a23c;
+            --btn-copy-hover: #d4922a;
+            --btn-copy-active: #c2811f;
+            --btn-copy-focus: rgba(230, 162, 60, 0.35);
             --btn-default-bg: #f5f6f7;
             --btn-default-hover: #e6e8ea;
             --btn-default-active: #dfe2e6;
@@ -8433,6 +8517,10 @@ ${error.stack}`);
                 --btn-danger-bg: #d95a4f;
                 --btn-danger-hover: #c24f45;
                 --btn-danger-active: #ad453c;
+                --btn-copy-bg: #e6a23c;
+                --btn-copy-hover: #d4922a;
+                --btn-copy-active: #c2811f;
+                --btn-copy-focus: rgba(230, 162, 60, 0.45);
                 --btn-default-bg: #3a3f45;
                 --btn-default-hover: #434a52;
                 --btn-default-active: #353b42;
@@ -8501,6 +8589,10 @@ ${error.stack}`);
                 --btn-danger-bg: #d95a4f;
                 --btn-danger-hover: #c24f45;
                 --btn-danger-active: #ad453c;
+                --btn-copy-bg: #e6a23c;
+                --btn-copy-hover: #d4922a;
+                --btn-copy-active: #c2811f;
+                --btn-copy-focus: rgba(230, 162, 60, 0.45);
                 --btn-default-bg: #3a3f45;
                 --btn-default-hover: #434a52;
                 --btn-default-active: #353b42;
@@ -9626,6 +9718,25 @@ ${error.stack}`);
             background-color: var(--btn-danger-active);
             border-color: var(--btn-danger-active);
         }
+        #settings-modal .btn-copy {
+            background-color: var(--btn-copy-bg, #e6a23c);
+            border-color: var(--btn-copy-bg, #e6a23c);
+            color: #ffffff;
+        }
+        #settings-modal .btn-copy:hover {
+            background-color: var(--btn-copy-hover, #d4922a);
+            border-color: var(--btn-copy-hover, #d4922a);
+        }
+        #settings-modal .btn-copy:active {
+            background-color: var(--btn-copy-active, #c2811f);
+            border-color: var(--btn-copy-active, #c2811f);
+        }
+        #settings-modal .btn-copy:focus {
+            box-shadow: none;
+        }
+        #settings-modal .btn-copy:focus-visible {
+            box-shadow: 0 0 0 2px var(--btn-copy-bg, #e6a23c);
+        }
         #settings-modal .btn-default {
             background-color: var(--btn-default-bg);
             border-color: var(--btn-default-border);
@@ -9731,8 +9842,66 @@ ${error.stack}`);
             border-radius: 8px;
             border: 1px dashed rgba(var(--settings-card-rgb, 0, 188, 212), 0.38);
         }
+        .api-image-settings.is-collapsed {
+            gap: 0;
+            padding: 8px 12px;
+        }
         .api-image-settings .switch-container {
             margin-bottom: 0;
+        }
+        .api-image-settings-header {
+            gap: 8px;
+        }
+        .api-image-settings-heading {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+        .api-image-settings-heading .switch-label {
+            margin-right: 0;
+        }
+        .api-image-fold {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+        .api-image-fold:hover {
+            background: rgba(var(--settings-card-rgb, 0, 188, 212), 0.18);
+        }
+        .api-image-fold:focus {
+            outline: none;
+            box-shadow: none;
+        }
+        .api-image-fold:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--ld-accent, var(--highlight-color));
+        }
+        .api-image-fold-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 5px 0 5px 7px;
+            border-color: transparent transparent transparent currentColor;
+            transform: rotate(90deg);
+            transition: transform 0.16s ease;
+        }
+        .api-image-settings.is-collapsed .api-image-fold-icon {
+            transform: rotate(0deg);
+        }
+        .api-image-settings.is-collapsed .api-image-options {
+            display: none;
         }
         .api-image-options {
             display: grid;
@@ -19774,11 +19943,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.10 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.11 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.10";
+  const VERSION = "[20260830] v1.0.11";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -19962,7 +20131,8 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .prompt-sub-tab-button:focus,
 #settings-modal .toast-sub-tab-button:focus,
 #settings-modal .btn:focus,
-#settings-modal .custom-button:focus {
+#settings-modal .custom-button:focus,
+#settings-modal .api-image-fold:focus {
   outline: none !important;
   box-shadow: none !important;
 }
@@ -19975,7 +20145,8 @@ body[data-theme="dark"] #settings-modal {
 #settings-modal .prompt-sub-tab-button:focus-visible,
 #settings-modal .toast-sub-tab-button:focus-visible,
 #settings-modal .btn:focus-visible,
-#settings-modal .custom-button:focus-visible {
+#settings-modal .custom-button:focus-visible,
+#settings-modal .api-image-fold:focus-visible {
   outline: none !important;
   box-shadow: 0 0 0 2px var(--ld-accent);
 }
