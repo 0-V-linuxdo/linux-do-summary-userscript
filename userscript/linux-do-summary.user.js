@@ -9926,7 +9926,12 @@ ${error.stack}`);
             margin-top: 0;
             justify-content: flex-end;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 8px;
+        }
+        #api-settings-main .api-settings-action-bar .button-group .btn {
+            flex: 1 1 0;
+            max-width: none;
+            min-width: 72px;
         }
         #api-settings-main {
             margin-bottom: 0;
