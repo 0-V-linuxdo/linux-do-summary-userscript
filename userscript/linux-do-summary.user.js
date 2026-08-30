@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.12
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.13
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.12
+// @version      [20260830] v1.0.13
+// @update-log   [20260830] v1.0.13: 设置弹窗标题栏垂直对齐；折叠侧栏图标改为正文色，不再用蓝色。
 // @update-log   [20260830] v1.0.12: 提高当前子 tab 与其他子 tab 的对比度；选中用实色填充，未选中改弱对比。
 // @update-log   [20260830] v1.0.11: API 配置增加复制按钮；图片设置默认折叠。
 // @update-log   [20260830] v1.0.10: DeArrow 子 tab「开关」改为「自动」。
@@ -9194,44 +9195,71 @@ ${error.stack}`);
             margin-bottom: 20px;
         }
         #settings-modal .modal-header h2 {
+            display: flex;
+            align-items: center;
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 36px;
             margin: 0;
+            padding: 0;
             color: var(--highlight-color);
+            line-height: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         #settings-modal .modal-header-button {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            flex: 0 0 36px;
+            box-sizing: border-box;
             width: 36px;
             height: 36px;
+            margin: 0;
+            padding: 0;
             border-radius: 8px;
             border: none;
             background: none;
-            color: var(--highlight-color);
+            color: var(--text-color);
             cursor: pointer;
-            transition: color 0.2s ease, transform 0.2s ease;
+            transition: color 0.2s ease, background-color 0.2s ease;
         }
         #settings-modal .modal-header-button:hover {
-            color: var(--highlight-color);
-            transform: translateY(-1px);
+            color: var(--text-color);
+            background-color: color-mix(in srgb, var(--text-color) 10%, transparent);
         }
         #settings-modal .modal-header-button:focus-visible {
             outline: 2px solid var(--highlight-color);
             outline-offset: 2px;
         }
         #settings-modal .modal-header-button.active {
-            color: var(--highlight-color);
+            color: var(--text-color);
         }
         #settings-modal .modal-header-button-icon {
+            display: block;
             width: 20px;
             height: 20px;
+            flex-shrink: 0;
+            fill: currentColor;
         }
         #settings-modal #close-settings {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 36px;
+            box-sizing: border-box;
+            width: 36px;
+            height: 36px;
+            margin-left: auto;
+            padding: 0;
             background: none;
             border: none;
-            font-size: 24px;
+            border-radius: 8px;
+            font-size: 18px;
+            line-height: 1;
             cursor: pointer;
             color: var(--text-color);
-            margin-left: auto;
         }
         #settings-modal .modal-body {
             display: flex;
@@ -19957,11 +19985,11 @@ ${historyText}` : "已有问答历史：暂无",
   bootstrapUserscriptRuntime();
 })();
 
-/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.12 ===== */
+/* ===== [LINUX DO] 弹窗优化 [20260830] v1.0.13 ===== */
 (() => {
   "use strict";
 
-  const VERSION = "[20260830] v1.0.12";
+  const VERSION = "[20260830] v1.0.13";
   const STYLE_ID = "ld-popup-polish-style";
   const CONFIRM_ID = "ld-popup-polish-confirm";
   const DELETE_MESSAGES = {
@@ -20073,16 +20101,35 @@ body[data-theme="dark"] #settings-modal {
 }
 
 #settings-modal .modal-header {
-  flex: 0 0 auto;
+  display: flex !important;
+  flex-direction: row !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  box-sizing: border-box;
+  min-height: 52px;
   margin: 0 !important;
-  padding: 16px 20px !important;
+  padding: 8px 16px !important;
   border-bottom: 1px solid var(--ld-line);
   background: var(--ld-modal);
 }
 
 #settings-modal .modal-header h2 {
-  font-size: 16px;
-  line-height: 1.3;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  color: var(--ld-accent, var(--highlight-color));
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 #settings-modal .modal-body {
@@ -20112,20 +20159,48 @@ body[data-theme="dark"] #settings-modal {
   overflow-y: auto !important;
 }
 
-#settings-modal .modal-header-button:hover {
-  background: color-mix(in srgb, var(--ld-accent) 16%, transparent);
+#settings-modal .modal-header-button,
+#settings-modal #close-settings {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 36px !important;
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--ld-ink, var(--text-color, #e8edf2)) !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  transform: none !important;
+  box-shadow: none;
+  cursor: pointer;
 }
 
 #settings-modal #close-settings {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  font-size: 20px;
-  line-height: 1;
+  margin-left: auto !important;
 }
 
+#settings-modal .modal-header-button:hover,
+#settings-modal .modal-header-button.active,
+#settings-modal .modal-header-button:active,
 #settings-modal #close-settings:hover {
-  background: color-mix(in srgb, var(--ld-accent) 16%, transparent);
+  color: var(--ld-ink, var(--text-color, #e8edf2)) !important;
+  background: color-mix(in srgb, var(--ld-ink, var(--text-color, #e8edf2)) 10%, transparent) !important;
+  transform: none !important;
+}
+
+#settings-modal .modal-header-button-icon {
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0;
+  fill: currentColor;
 }
 
 #settings-modal #close-settings:focus,
