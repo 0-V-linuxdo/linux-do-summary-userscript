@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.14
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.15
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.14
+// @version      [20260830] v1.0.15
+// @update-log   [20260830] v1.0.15: 纠正 toast 与已总结状态不同步；已有总结则停止重试；关掉 toast 会取消过期请求。
 // @update-log   [20260830] v1.0.14: 切左侧 tab 不再整窗重排，去掉 hover 位移，切换更跟手。
 // @update-log   [20260830] v1.0.13: 设置弹窗标题栏垂直对齐；折叠侧栏图标改为正文色，不再用蓝色。
 // @update-log   [20260830] v1.0.12: 提高当前子 tab 与其他子 tab 的对比度；选中用实色填充，未选中改弱对比。
@@ -955,7 +956,8 @@
   async function requestChatCompletion({
     currentApi,
     messages,
-    fetchImpl = fetch
+    fetchImpl = fetch,
+    signal = null
   }) {
     if (!currentApi?.key) {
       throw new Error("API Key is not set.");
@@ -972,11 +974,23 @@
       messages,
       stream: false
     };
-    const response = await fetchImpl(currentApi.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data)
-    });
+    let response;
+    try {
+      response = await fetchImpl(currentApi.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+        signal: signal || void 0
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        const cancelled = new Error("总结已取消");
+        cancelled.code = "SUMMARY_CANCELLED";
+        cancelled.retryable = false;
+        throw cancelled;
+      }
+      throw error;
+    }
     if (!response.ok) {
       const error2 = new Error(`HTTP error! status: ${response.status}`);
       const responseBody = await readResponseText(response);
@@ -1038,7 +1052,8 @@
     promptConfig,
     txt,
     imageInputs = [],
-    fetchImpl = fetch
+    fetchImpl = fetch,
+    signal = null
   }) {
     const systemPrompt = `${promptConfig.summaryMethod}
 ${promptConfig.outputFormat}`;
@@ -1048,7 +1063,8 @@ ${promptConfig.outputFormat}`;
         { role: "system", content: systemPrompt },
         { role: "user", content: buildUserContentWithImages(txt, imageInputs) }
       ],
-      fetchImpl
+      fetchImpl,
+      signal
     });
   }
 
@@ -3014,7 +3030,10 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       extractTopicIdFromElement: extractTopicIdFromElement2,
       isListSummaryPageUrl: isListSummaryPageUrl2,
       isSummarySelectionLocked: isSummarySelectionLocked2,
-      openListQuestionPanel
+      openListQuestionPanel,
+      beginSummaryOperation,
+      finishSummaryOperation,
+      isSummaryStopError: isSummaryStopError2
     } = deps;
     const LIST_SUMMARY_INTERNAL_SELECTOR = ".topic-summary-row, .topic-summary-container, .topic-summary-button, .topic-dearrow-button, .topic-question-button, .topic-summary-button-group, .topic-summary-control-button, .topic-summary-history-browser, .topic-summary-history-content, .topic-summary-content, .topic-summary-history-indicator, .topic-question-panel, .topic-question-header, .topic-question-title, .topic-question-presets, .topic-question-preset-button, .topic-question-preset-menu, .topic-question-preset-menu-item, .topic-question-history, .topic-question-compose, .topic-question-input-shell, .topic-question-input, .topic-question-compose-actions, .topic-question-send, .topic-question-status";
     const LIST_SUMMARY_TOPIC_CONTAINER_SELECTOR = ".topic-list, .topic-list-body, .topic-list-item";
@@ -3188,6 +3207,51 @@ ${error.stack}`);
         topicId: normalizedTopicId,
         hasLocalHistory,
         hasSummaryState
+      };
+    }
+    function getListSummaryButtonModel(topicId) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      const { hasLocalHistory, hasSummaryState } = getTopicSummaryState(normalizedTopicId);
+      const isSummarizing = state2.summarizingTopics.has(normalizedTopicId);
+      const isDrivePulling = listDriveHistoryPullingTopics.has(normalizedTopicId);
+      const isBusy = isSummarizing || isDrivePulling;
+      if (isBusy) {
+        return {
+          hasLocalHistory,
+          hasSummaryState,
+          isBusy: true,
+          isCompleted: false,
+          text: isDrivePulling ? "☁️ 拉取中..." : "⏳ 总结中...",
+          className: "loading"
+        };
+      }
+      if (hasLocalHistory) {
+        return {
+          hasLocalHistory,
+          hasSummaryState,
+          isBusy: false,
+          isCompleted: true,
+          text: "📝 已总结",
+          className: "has-summary"
+        };
+      }
+      if (hasSummaryState && canAttemptDrivePull()) {
+        return {
+          hasLocalHistory,
+          hasSummaryState,
+          isBusy: false,
+          isCompleted: false,
+          text: "☁️ 拉取",
+          className: ""
+        };
+      }
+      return {
+        hasLocalHistory,
+        hasSummaryState,
+        isBusy: false,
+        isCompleted: false,
+        text: "📝 总结",
+        className: ""
       };
     }
     function isTopicDrivePulling(topicId) {
@@ -3811,8 +3875,9 @@ ${error.stack}`);
         const history = historyMap ? historyMap[topicId] || [] : getSummaryHistory2(topicId);
         const hasLocalHistory = history.length > 0;
         const hasSummaryState = hasLocalHistory || isTopicMarkedSummarized2(topicId);
-        const isBusy = isTopicSummaryBusy(topicId);
-        const busyLabel = getTopicSummaryBusyButtonLabel(topicId);
+        const buttonModel = getListSummaryButtonModel(topicId);
+        const isBusy = buttonModel.isBusy;
+        const busyLabel = buttonModel.text;
         if (!summaryButton) {
           summaryButton = document.createElement("button");
           summaryButton.className = "topic-summary-button";
@@ -3859,21 +3924,19 @@ ${error.stack}`);
         }
         mountTopicListButton(item, questionButton);
         summaryButton.disabled = isBusy;
+        summaryButton.textContent = buttonModel.text;
         if (isBusy) {
           summaryButton.classList.add("loading");
           summaryButton.classList.remove("has-summary");
-          summaryButton.textContent = busyLabel;
-        } else if (hasSummaryState) {
+        } else if (buttonModel.isCompleted) {
           summaryButton.classList.add("has-summary");
           summaryButton.classList.remove("loading");
-          summaryButton.textContent = "📝 已总结";
         } else {
           summaryButton.classList.remove("loading", "has-summary");
-          summaryButton.textContent = "📝 总结";
         }
         item.classList.add("has-summary-button");
         item.classList.add("has-question-button");
-        if (hasSummaryState && !isBusy) {
+        if (buttonModel.isCompleted && !isBusy) {
           item.classList.add("has-summary");
         } else {
           item.classList.remove("has-summary");
@@ -4088,15 +4151,27 @@ ${error.stack}`);
       const operationApi = {
         ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
       };
-      state2.summarizingTopics.add(normalizedTopicId);
-      updateSidebarSubmitButtonState2(normalizedTopicId);
+      const started = beginSummaryOperation?.(normalizedTopicId, {
+        mode: "manual",
+        toast: summarizingToast
+      }) || { skipped: false, generation: null };
+      if (started.skipped) {
+        createToast2("该话题正在总结中，请稍候...", "info", null, normalizedTopicId);
+        return;
+      }
       try {
         const { startFloor, endFloor } = await getFullFloorRangeForTopic(
           normalizedTopicId,
           void 0,
           operationApi
         );
-        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi);
+        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi, {
+          generation: started.generation,
+          mode: "manual",
+          toast: summarizingToast,
+          controller: started.controller,
+          stopIfExistingHistory: true
+        });
         summarizingToast.changeType("success");
         summarizingToast.update("总结生成成功！");
         saveSummaryHistory2(normalizedTopicId, summary, requestContext.model, requestContext);
@@ -4114,14 +4189,30 @@ ${error.stack}`);
         const topicItem = button.closest(".topic-list-item");
         if (topicItem) topicItem.classList.add("has-summary");
       } catch (error) {
-        console.error(`List summary failed for ${normalizedTopicId}:`, error);
-        const reason = normalizeErrorMessage(error);
-        summarizingToast.changeType("error");
-        summarizingToast.update(`总结失败: ${reason}`);
-        renderTopicSummaryError(container, buttonGroup, normalizedTopicId, error);
+        if (isSummaryStopError2?.(error)) {
+          if (error.code === "SUMMARY_HAS_EXISTING") {
+            summarizingToast.changeType("success", 2400);
+            summarizingToast.update("已有总结，已停止重试");
+            const { hasLocalHistory } = getTopicSummaryState(normalizedTopicId);
+            const history = hasLocalHistory ? getSummaryHistory2(normalizedTopicId) : [];
+            if (history[0]?.summary) {
+              showTopicSummary(container, buttonGroup, history[0].summary, normalizedTopicId, {
+                renderMode: history[0]?.renderMode
+              });
+            }
+          } else {
+            summarizingToast.clear?.();
+          }
+        } else {
+          console.error(`List summary failed for ${normalizedTopicId}:`, error);
+          const reason = normalizeErrorMessage(error);
+          summarizingToast.changeType("error");
+          summarizingToast.update(`总结失败: ${reason}`);
+          renderTopicSummaryError(container, buttonGroup, normalizedTopicId, error);
+        }
         button.classList.remove("loading");
-        const { hasSummaryState: hasNextSummaryState } = getTopicSummaryState(normalizedTopicId);
-        if (hasNextSummaryState) {
+        const { hasLocalHistory: hasNextLocalHistory } = getTopicSummaryState(normalizedTopicId);
+        if (hasNextLocalHistory) {
           button.classList.add("has-summary");
           button.textContent = "📝 已总结";
         } else {
@@ -4133,7 +4224,7 @@ ${error.stack}`);
           expandTopicSummaryView(normalizedTopicId, { closeOthers: true, track: true });
         }
       } finally {
-        state2.summarizingTopics.delete(normalizedTopicId);
+        finishSummaryOperation?.(normalizedTopicId, started.generation);
         updateTopicSummaryButtons(normalizedTopicId);
         updateSidebarSubmitButtonState2(normalizedTopicId);
       }
@@ -4391,15 +4482,27 @@ ${error.stack}`);
       const operationApi = {
         ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
       };
-      state2.summarizingTopics.add(normalizedTopicId);
-      updateSidebarSubmitButtonState2(normalizedTopicId);
+      const started = beginSummaryOperation?.(normalizedTopicId, {
+        mode: "manual",
+        toast: summarizingToast,
+        force: true
+      }) || { skipped: false, generation: null };
+      if (started.skipped) {
+        createToast2("该话题正在总结中，请稍候...", "info", null, normalizedTopicId);
+        return;
+      }
       try {
         const { startFloor, endFloor } = await getFullFloorRangeForTopic(
           normalizedTopicId,
           void 0,
           operationApi
         );
-        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi);
+        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi, {
+          generation: started.generation,
+          mode: "manual",
+          toast: summarizingToast,
+          controller: started.controller
+        });
         summarizingToast.changeType("success");
         summarizingToast.update("总结更新成功！");
         saveSummaryHistory2(normalizedTopicId, summary, requestContext.model, requestContext);
@@ -4418,15 +4521,24 @@ ${error.stack}`);
         }
         if (topicItem) topicItem.classList.add("has-summary");
       } catch (error) {
-        console.error(`List refresh failed for ${normalizedTopicId}:`, error);
-        const reason = normalizeErrorMessage(error);
-        summarizingToast.changeType("error");
-        summarizingToast.update(`总结失败: ${reason}`);
-        renderTopicSummaryError(container, buttonGroup, normalizedTopicId, error);
+        if (isSummaryStopError2?.(error)) {
+          if (error.code === "SUMMARY_HAS_EXISTING") {
+            summarizingToast.changeType("success", 2400);
+            summarizingToast.update("已有总结，已停止重试");
+          } else {
+            summarizingToast.clear?.();
+          }
+        } else {
+          console.error(`List refresh failed for ${normalizedTopicId}:`, error);
+          const reason = normalizeErrorMessage(error);
+          summarizingToast.changeType("error");
+          summarizingToast.update(`总结失败: ${reason}`);
+          renderTopicSummaryError(container, buttonGroup, normalizedTopicId, error);
+        }
         if (summaryButton) {
           summaryButton.classList.remove("loading");
-          const { hasSummaryState } = getTopicSummaryState(normalizedTopicId);
-          if (hasSummaryState) {
+          const { hasLocalHistory } = getTopicSummaryState(normalizedTopicId);
+          if (hasLocalHistory) {
             summaryButton.classList.add("has-summary");
             summaryButton.textContent = "📝 已总结";
           } else {
@@ -4436,7 +4548,7 @@ ${error.stack}`);
           summaryButton.disabled = false;
         }
       } finally {
-        state2.summarizingTopics.delete(normalizedTopicId);
+        finishSummaryOperation?.(normalizedTopicId, started.generation);
         updateTopicSummaryButtons(normalizedTopicId);
         updateSidebarSubmitButtonState2(normalizedTopicId);
       }
@@ -4486,36 +4598,32 @@ ${error.stack}`);
       const normalizedTopicId = normalizeTopicId4(topicId);
       const buttons = document.querySelectorAll(`.topic-summary-button[data-topic-id="${normalizedTopicId}"]`);
       if (!buttons.length) return;
-      const { hasSummaryState } = getTopicSummaryState(normalizedTopicId);
-      const isSummarizing = state2.summarizingTopics.has(normalizedTopicId);
-      const isDrivePulling = listDriveHistoryPullingTopics.has(normalizedTopicId);
-      const isBusy = isSummarizing || isDrivePulling;
-      const busyLabel = isDrivePulling ? "☁️ 拉取中..." : "⏳ 总结中...";
+      const buttonModel = getListSummaryButtonModel(normalizedTopicId);
+      const { hasSummaryState, hasLocalHistory } = buttonModel;
+      const isBusy = buttonModel.isBusy;
       buttons.forEach((button) => {
         button.disabled = isBusy;
+        button.textContent = buttonModel.text;
         if (isBusy) {
           button.classList.add("loading");
           button.classList.remove("has-summary");
-          button.textContent = busyLabel;
-        } else if (hasSummaryState) {
+        } else if (buttonModel.isCompleted) {
           button.classList.remove("loading");
           button.classList.add("has-summary");
-          button.textContent = "📝 已总结";
         } else {
           button.classList.remove("loading");
           button.classList.remove("has-summary");
-          button.textContent = "📝 总结";
         }
         const topicItem = button.closest(".topic-list-item");
         if (topicItem) {
-          if (hasSummaryState && !isBusy) {
+          if (buttonModel.isCompleted && !isBusy) {
             topicItem.classList.add("has-summary");
           } else {
             topicItem.classList.remove("has-summary");
           }
         }
       });
-      if (isBusy || !hasSummaryState) {
+      if (isBusy || !hasLocalHistory) {
         return;
       }
       const history = getSummaryHistory2(normalizedTopicId);
@@ -12376,7 +12484,8 @@ ${error.stack}`);
     topicTitleMap: topicTitleMap2,
     topicTitleFetchPromises: topicTitleFetchPromises2,
     getFetchOptions: getFetchOptions2,
-    onToastClick
+    onToastClick,
+    onToastDismiss
   } = {}) {
     function createToastContainer() {
       let container = document.getElementById("summary-toast-container");
@@ -12463,6 +12572,10 @@ ${error.stack}`);
       closeBtn.innerHTML = "&times;";
       closeBtn.addEventListener("click", (event) => {
         event.stopPropagation();
+        const dismissTopicId = toast.dataset.topicId;
+        if (dismissTopicId && typeof onToastDismiss === "function") {
+          onToastDismiss(dismissTopicId, toastId);
+        }
         removeToast2(toastId);
       });
       toast.appendChild(closeBtn);
@@ -12478,7 +12591,7 @@ ${error.stack}`);
         timer: null,
         update: (newMessage) => updateToast(toastId, newMessage),
         remove: () => removeToast2(toastId),
-        changeType: (newType) => changeToastType(toastId, newType)
+        changeType: (newType, customDuration = null) => changeToastType(toastId, newType, customDuration)
       };
       if (typeSettings.autoClose && duration > 0) {
         toastObj.timer = setTimeout(() => {
@@ -12526,7 +12639,7 @@ ${error.stack}`);
         }
       }
     }
-    function changeToastType(toastId, newType) {
+    function changeToastType(toastId, newType, customDuration = null) {
       const toast = document.getElementById(toastId);
       if (!toast) return;
       let toastObj = null;
@@ -12548,10 +12661,11 @@ ${error.stack}`);
         clearTimeout(toastObj.timer);
         toastObj.timer = null;
       }
-      if (typeSettings.autoClose && typeSettings.duration > 0) {
+      const duration = customDuration !== null ? customDuration : typeSettings.autoClose && typeSettings.duration > 0 ? typeSettings.duration * 1e3 : 0;
+      if (duration > 0) {
         toastObj.timer = setTimeout(() => {
           removeToast2(toastId);
-        }, typeSettings.duration * 1e3);
+        }, duration);
       }
     }
     function createSummarizingToast2(topicId) {
@@ -12597,9 +12711,9 @@ ${error.stack}`);
         update: (message) => {
           toast.update(message);
         },
-        changeType: (newType) => {
+        changeType: (newType, customDuration = null) => {
           clearInterval(intervalId);
-          toast.changeType(newType);
+          toast.changeType(newType, customDuration);
         }
       };
     }
@@ -13350,6 +13464,8 @@ ${error.stack}`);
       onContentFetchRetry
     } = deps;
     const sidebarDriveHistoryPullingTopics = /* @__PURE__ */ new Set();
+    const summaryOperationsByTopic = /* @__PURE__ */ new Map();
+    let summaryOperationSeq = 0;
     function normalizeTopicId4(topicId) {
       if (topicId === null || topicId === void 0) return "";
       return String(topicId).trim();
@@ -13371,9 +13487,116 @@ ${error.stack}`);
       }
       return true;
     }
+    function createSummaryStopError(code, message) {
+      const error = new Error(message);
+      error.code = code;
+      error.retryable = false;
+      return error;
+    }
+    function isSummaryStopError(error) {
+      return error?.code === "SUMMARY_CANCELLED" || error?.code === "SUMMARY_HAS_EXISTING";
+    }
     function isNonRetryableSummaryError(error) {
       if (!error || typeof error !== "object") return false;
-      return error.retryable === false || error.code === "CONTENT_FILTER_BLOCKED";
+      if (error.name === "AbortError") return true;
+      return error.retryable === false || error.code === "CONTENT_FILTER_BLOCKED" || isSummaryStopError(error);
+    }
+    function getActiveSummaryOperation(topicId) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      if (!normalizedTopicId) return null;
+      return summaryOperationsByTopic.get(normalizedTopicId) || null;
+    }
+    function getSummaryStopDecision(topicId, operationContext = null) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      const generation = operationContext?.generation;
+      const mode = operationContext?.mode || "manual";
+      if (generation) {
+        const operation = getActiveSummaryOperation(normalizedTopicId);
+        if (!operation || operation.generation !== generation || operation.aborted) {
+          return createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
+        }
+      }
+      if (mode === "auto" || operationContext?.stopIfExistingHistory) {
+        try {
+          const history = getSummaryHistory2(normalizedTopicId);
+          if (Array.isArray(history) && history.length > 0) {
+            return createSummaryStopError("SUMMARY_HAS_EXISTING", "已有总结，已停止重试");
+          }
+        } catch (_error) {
+        }
+      }
+      return null;
+    }
+    function beginSummaryOperation(topicId, { mode = "manual", toast = null, force = false } = {}) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      if (!normalizedTopicId) return { skipped: true, reason: "invalid-topic-id" };
+      const existing = summaryOperationsByTopic.get(normalizedTopicId);
+      if (existing && !existing.aborted && !force) {
+        return { skipped: true, reason: "busy", generation: existing.generation };
+      }
+      if (existing) {
+        existing.aborted = true;
+        try {
+          existing.controller?.abort?.();
+        } catch (_error) {
+        }
+      }
+      summaryOperationSeq += 1;
+      const generation = `${normalizedTopicId}:${summaryOperationSeq}:${Date.now()}`;
+      let controller = null;
+      try {
+        controller = new AbortController();
+      } catch (_error) {
+        controller = {
+          abort() {
+          },
+          signal: {
+            aborted: false,
+            addEventListener() {
+            }
+          }
+        };
+      }
+      const operation = {
+        generation,
+        aborted: false,
+        mode,
+        toast,
+        controller
+      };
+      summaryOperationsByTopic.set(normalizedTopicId, operation);
+      state2.summarizingTopics.add(normalizedTopicId);
+      updateTopicSummaryButtons?.(normalizedTopicId);
+      updateSidebarSubmitButtonState2(normalizedTopicId);
+      return {
+        skipped: false,
+        generation,
+        operation,
+        controller
+      };
+    }
+    function finishSummaryOperation(topicId, generation) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      const existing = summaryOperationsByTopic.get(normalizedTopicId);
+      if (existing && (!generation || existing.generation === generation)) {
+        summaryOperationsByTopic.delete(normalizedTopicId);
+      }
+      state2.summarizingTopics.delete(normalizedTopicId);
+      setTopicRetryVisualState(normalizedTopicId, false);
+      updateTopicSummaryButtons?.(normalizedTopicId);
+      updateSidebarSubmitButtonState2(normalizedTopicId);
+    }
+    function abortSummaryOperation(topicId, options = {}) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      const existing = summaryOperationsByTopic.get(normalizedTopicId);
+      if (!existing || existing.aborted) return false;
+      if (options.onlyAuto && existing.mode !== "auto") return false;
+      existing.aborted = true;
+      try {
+        existing.controller?.abort?.();
+      } catch (_error) {
+      }
+      return true;
     }
     function getContentRetryCount(operationApi = null) {
       const currentApiConfig = operationApi || (typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : null);
@@ -13386,7 +13609,10 @@ ${error.stack}`);
       return normalizeContentRetryCount(source);
     }
     function fetchLinuxDoTopicContent(url, fetchOptions, context = {}) {
-      return fetchLinuxDoContentWith429Retry(url, fetchOptions, {
+      const activeOperation = getActiveSummaryOperation(context.topicId);
+      const signal = activeOperation && !activeOperation.aborted ? activeOperation.controller?.signal : null;
+      const requestOptions = signal ? { ...fetchOptions, signal } : fetchOptions;
+      return fetchLinuxDoContentWith429Retry(url, requestOptions, {
         retryCount: getContentRetryCount(context.currentApi),
         waitForRetry: waitForContentRetry,
         onRetry: async (retryInfo) => {
@@ -13708,18 +13934,24 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       }
       return urls;
     }
-    async function main(building, startFloor, endFloor, retryAttempt = 0, operationApi = null) {
+    async function main(building, startFloor, endFloor, retryAttempt = 0, operationApi = null, operationContext = null) {
       const currentApi = operationApi || {
         ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
       };
+      const stopNow = getSummaryStopDecision(building, operationContext);
+      if (stopNow) throw stopNow;
       try {
         const topicTitle = typeof ensureTopicTitle2 === "function" ? await ensureTopicTitle2(building) : getTopicTitle2?.(building);
+        const afterTitleStop = getSummaryStopDecision(building, operationContext);
+        if (afterTitleStop) throw afterTitleStop;
         const topicContent = await buildTopicContentContext(
           building,
           startFloor,
           endFloor,
           currentApi
         );
+        const afterContentStop = getSummaryStopDecision(building, operationContext);
+        if (afterContentStop) throw afterContentStop;
         if (!topicContent?.contentText) {
           throw new Error("未能获取到帖子内容");
         }
@@ -13739,8 +13971,11 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
           skippedImages: [
             ...topicContent.skippedImages || [],
             ...imageContext.skippedImages || []
-          ]
+          ],
+          signal: operationContext?.controller?.signal || null
         });
+        const afterSummaryStop = getSummaryStopDecision(building, operationContext);
+        if (afterSummaryStop) throw afterSummaryStop;
         if (!summary) {
           throw new Error("API返回了空的总结内容");
         }
@@ -13749,21 +13984,48 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         }
         return summary;
       } catch (error) {
+        if (error?.name === "AbortError") {
+          throw createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
+        }
+        if (isSummaryStopError(error) || isNonRetryableSummaryError(error)) {
+          throw error;
+        }
         const currentApiConfig = currentApi;
         const retryCount = normalizeAutoRetryCount2(currentApiConfig && currentApiConfig.retryCount, state2.autoRetryCount);
         const retryInterval = normalizeAutoRetryInterval2(currentApiConfig && currentApiConfig.retryInterval, state2.autoRetryInterval);
         state2.autoRetryCount = retryCount;
         state2.autoRetryInterval = retryInterval;
-        if (!isNonRetryableSummaryError(error) && retryAttempt < retryCount) {
+        if (retryAttempt < retryCount) {
+          const beforeRetryStop = getSummaryStopDecision(building, operationContext);
+          if (beforeRetryStop) throw beforeRetryStop;
           setTopicRetryVisualState(building, true);
-          createToast2(`总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`, "warning", null, building);
-          await new Promise((resolve) => setTimeout(resolve, retryInterval * 1e3));
-          return main(building, startFloor, endFloor, retryAttempt + 1, currentApi);
+          const retryMessage = `总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`;
+          const toast = operationContext?.toast;
+          if (toast && typeof toast.changeType === "function") {
+            toast.changeType("warning", 0);
+            toast.update(retryMessage);
+          } else {
+            createToast2(retryMessage, "warning", 0, building);
+          }
+          await new Promise((resolve) => {
+            const timer = setTimeout(resolve, retryInterval * 1e3);
+            const signal = operationContext?.controller?.signal;
+            if (!signal) return;
+            if (signal.aborted) {
+              clearTimeout(timer);
+              resolve();
+              return;
+            }
+            signal.addEventListener("abort", () => {
+              clearTimeout(timer);
+              resolve();
+            }, { once: true });
+          });
+          const afterWaitStop = getSummaryStopDecision(building, operationContext);
+          if (afterWaitStop) throw afterWaitStop;
+          return main(building, startFloor, endFloor, retryAttempt + 1, currentApi, operationContext);
         }
         setTopicRetryVisualState(building, false);
-        if (isNonRetryableSummaryError(error)) {
-          throw error;
-        }
         const finalError = new Error(`总结失败，已达到最大重试次数 (${retryCount + 1})。错误: ${error.message}`);
         finalError.cause = error;
         throw finalError;
@@ -13866,8 +14128,18 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       if (hasManualFallbackArmed) {
         pendingManualAfterDriveFailTopics2.delete(topicId);
       }
-      state2.summarizingTopics.add(topicId);
-      updateSidebarSubmitButtonState2(topicId);
+      const summarizingToastEarly = createSummarizingToast2(topicId);
+      const started = beginSummaryOperation(topicId, {
+        mode: "manual",
+        toast: summarizingToastEarly
+      });
+      if (started.skipped) {
+        createToast2("该话题正在总结中，请稍候...", "info", null, topicId);
+        showSummarizingInterface(resultDiv, topicId);
+        historyDiv.style.display = "none";
+        updateSidebarSubmitButtonState2(topicId);
+        return;
+      }
       resultDiv.innerHTML = "";
       const contentWrapper = document.createElement("div");
       contentWrapper.className = "summary-content-wrapper";
@@ -13882,7 +14154,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       historyDiv.style.display = "none";
       const historyButton = document.getElementById("history-button");
       if (historyButton) historyButton.classList.remove("active");
-      const summarizingToast = createSummarizingToast2(topicId);
+      const summarizingToast = summarizingToastEarly;
       const requestContext = captureCurrentSummaryRequestContext2();
       const operationApi = {
         ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
@@ -13905,7 +14177,12 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         if (endFloor - startFloor + 1 > maxFloorRange) {
           throw new Error(`楼层范围不能超过${maxFloorRange}楼！`);
         }
-        const summary = await main(topicId, startFloor, endFloor, 0, operationApi);
+        const summary = await main(topicId, startFloor, endFloor, 0, operationApi, {
+          generation: started.generation,
+          mode: "manual",
+          toast: summarizingToast,
+          controller: started.controller
+        });
         if (!summary) {
           throw new Error("生成总结失败 (空响应)");
         }
@@ -13925,24 +14202,33 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
           }, 3e3);
         }
       } catch (error) {
-        console.error("Summary failed:", error);
-        const message = error?.message || String(error || "未知错误");
-        displayError(`发生错误: ${message}`);
-        summarizingToast.changeType("error");
-        summarizingToast.update(`总结失败: ${message}`);
+        if (isSummaryStopError(error)) {
+          if (error.code === "SUMMARY_HAS_EXISTING") {
+            summarizingToast.changeType("success", 2400);
+            summarizingToast.update("已有总结，已停止重试");
+            loadHistoryForCurrentTopic2();
+            autoShowHistoryIfExists2(topicId);
+          } else {
+            summarizingToast.clear?.();
+          }
+        } else {
+          console.error("Summary failed:", error);
+          const message = error?.message || String(error || "未知错误");
+          displayError(`发生错误: ${message}`);
+          summarizingToast.changeType("error");
+          summarizingToast.update(`总结失败: ${message}`);
+        }
       } finally {
-        state2.summarizingTopics.delete(topicId);
-        updateTopicSummaryButtons?.(topicId);
+        finishSummaryOperation(topicId, started.generation);
         if (submitButton && !submitButton.classList.contains("summarized")) {
           updateSidebarSubmitButtonState2(topicId);
         }
-        updateTopicSummaryButtons?.(topicId);
       }
     }
     async function attemptAutoSummarize2(topicId) {
       if (!state2.newTopicAutoSummarize) return;
-      const { hasSummaryState } = getTopicSummaryState(topicId);
-      if (hasSummaryState) {
+      const { hasLocalHistory } = getTopicSummaryState(topicId);
+      if (hasLocalHistory) {
         return;
       }
       if (state2.summarizingTopics.has(topicId)) {
@@ -13954,15 +14240,25 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       const operationApi = {
         ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
       };
-      state2.summarizingTopics.add(topicId);
-      updateSidebarSubmitButtonState2(topicId);
+      const started = beginSummaryOperation(topicId, {
+        mode: "auto",
+        toast: summarizingToast
+      });
+      if (started.skipped) {
+        return;
+      }
       try {
         const { startFloor, endFloor } = await getFullFloorRangeForTopic(
           topicId,
           DEFAULT_FULL_FLOOR_END,
           operationApi
         );
-        const summary = await main(topicId, startFloor, endFloor, 0, operationApi);
+        const summary = await main(topicId, startFloor, endFloor, 0, operationApi, {
+          generation: started.generation,
+          mode: "auto",
+          toast: summarizingToast,
+          controller: started.controller
+        });
         summarizingToast.changeType("success");
         summarizingToast.update("话题自动总结完成！");
         saveSummaryHistory2(topicId, summary, requestContext.model, requestContext);
@@ -13973,17 +14269,25 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
           loadHistoryForCurrentTopic2();
         }
       } catch (error) {
-        console.error(`Auto summarize error for topic ${topicId}:`, error);
-        summarizingToast.changeType("error");
-        summarizingToast.update(`自动总结失败: ${error.message}`);
-        if (document.getElementById("building")?.value === topicId) {
-          displayError(`自动总结失败: ${error.message}`);
+        if (isSummaryStopError(error)) {
+          if (error.code === "SUMMARY_HAS_EXISTING") {
+            summarizingToast.changeType("success", 2400);
+            summarizingToast.update("已有总结，已停止重试");
+            loadHistoryForCurrentTopic2();
+            autoShowHistoryIfExists2(topicId);
+          } else {
+            summarizingToast.clear?.();
+          }
+        } else {
+          console.error(`Auto summarize error for topic ${topicId}:`, error);
+          summarizingToast.changeType("error");
+          summarizingToast.update(`自动总结失败: ${error.message}`);
+          if (document.getElementById("building")?.value === topicId) {
+            displayError(`自动总结失败: ${error.message}`);
+          }
         }
       } finally {
-        state2.summarizingTopics.delete(topicId);
-        updateTopicSummaryButtons?.(topicId);
-        updateSidebarSubmitButtonState2(topicId);
-        updateTopicSummaryButtons?.(topicId);
+        finishSummaryOperation(topicId, started.generation);
       }
     }
     async function ensureSidebarTopicHistoryFromDrive(topicId, {
@@ -14109,10 +14413,6 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       const activeTopicId = typeof extractTopicId2 === "function" ? normalizeTopicId4(extractTopicId2()) : "";
       if (activeTopicId && activeTopicId !== topicId) return;
       const historyDiv = document.getElementById("summary-history");
-      if (!(historyDiv && typeof historyDiv.loadHistory === "function")) {
-        console.warn("History div or loadHistory method not found.");
-        return;
-      }
       const safeGetTopicHistory = () => {
         try {
           const history = getSummaryHistory2(topicId);
@@ -14141,10 +14441,14 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         }
         localHistory = safeGetTopicHistory();
       }
-      try {
-        historyDiv.loadHistory(topicId);
-      } catch (error) {
-        console.warn(`History panel render failed for topic ${topicId}.`, error);
+      if (historyDiv && typeof historyDiv.loadHistory === "function") {
+        try {
+          historyDiv.loadHistory(topicId);
+        } catch (error) {
+          console.warn(`History panel render failed for topic ${topicId}.`, error);
+        }
+      } else {
+        console.warn("History div or loadHistory method not found.");
       }
       updateSidebarSubmitButtonState2(topicId);
       return {
@@ -14162,6 +14466,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       fetchTopicPostIds,
       getFullFloorRangeFromPostIds,
       main,
+      beginSummaryOperation,
+      finishSummaryOperation,
+      abortSummaryOperation,
+      isSummaryStopError,
       buildTopicContentContext,
       buildTopicQuestionContext,
       ensureSidebarTopicHistoryFromDrive,
@@ -18933,7 +19241,8 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       topicTitleMap,
       topicTitleFetchPromises,
       getFetchOptions: () => getFetchOptions(),
-      onToastClick: (...args) => handleToastClick(...args)
+      onToastClick: (...args) => handleToastClick(...args),
+      onToastDismiss: (topicId) => topicSummaryFeature?.abortSummaryOperation?.(topicId)
     });
     ({
       createToast,
@@ -19078,7 +19387,10 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       extractTopicIdFromElement,
       isListSummaryPageUrl,
       isSummarySelectionLocked,
-      openListQuestionPanel: (...args) => questionAnswerFeature?.openListQuestionPanel?.(...args)
+      openListQuestionPanel: (...args) => questionAnswerFeature?.openListQuestionPanel?.(...args),
+      beginSummaryOperation: (...args) => topicSummaryFeature?.beginSummaryOperation?.(...args),
+      finishSummaryOperation: (...args) => topicSummaryFeature?.finishSummaryOperation?.(...args),
+      isSummaryStopError: (...args) => topicSummaryFeature?.isSummaryStopError?.(...args)
     });
     dearrowFeature = createDeArrowFeature({
       state,
@@ -19197,7 +19509,8 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         promptConfig: state.promptConfigurations[state.currentPromptIndex],
         txt,
         imageInputs: options.imageInputs || [],
-        fetchImpl: fetch
+        fetchImpl: fetch,
+        signal: options.signal || null
       });
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -19522,8 +19835,7 @@ ${historyText}` : "已有问答历史：暂无",
     applySidebarSettings();
   }
   function extractTopicId() {
-    const match = window.location.href.match(/\/t\/topic\/(\d+)/);
-    return match ? match[1] : null;
+    return extractTopicIdFromUrl(window.location.href);
   }
   function extractTopicIdFromElement(element) {
     if (!element) return null;
@@ -19543,13 +19855,17 @@ ${historyText}` : "已有问答历史：暂无",
     }
     return null;
   }
+  function extractTopicIdFromUrl(url = "") {
+    const match = String(url || "").match(/\/t\/topic\/(\d+)/);
+    return match ? match[1] : null;
+  }
+  function abortSummaryOperation(topicId, options = {}) {
+    return topicSummaryFeature?.abortSummaryOperation?.(topicId, options);
+  }
   function scheduleAutoSummarize(topicId) {
     const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return;
     attemptAutoSummarize(normalizedTopicId);
-    setTimeout(() => {
-      attemptAutoSummarize(normalizedTopicId);
-    }, 800);
   }
   var TOPIC_PAGE_URL_REGEX = /^https:\/\/linux\.do\/t\/topic\/\d+/;
   var LIST_SUMMARY_PAGE_URL_REGEX = /^https:\/\/linux\.do\/(?:$|[?#]|latest(?:[/?#]|$)|new(?:[/?#]|$)|unread(?:[/?#]|$)|unseen(?:[/?#]|$)|bookmarks(?:[/?#]|$)|categories(?:[/?#]|$)|c\/|tags\/|u\/|search(?:[/?#]|$)|top(?:[/?#]|$))/;
@@ -19700,12 +20016,17 @@ ${historyText}` : "已有问答历史：暂无",
     window.addEventListener("pageshow", checkForUrlChange, { passive: true });
   }
   async function handleUrlChange(previousUrl) {
+    const previousTopicId = extractTopicIdFromUrl(previousUrl);
+    const currentTopicId = extractTopicId();
+    if (previousTopicId && previousTopicId !== currentTopicId) {
+      abortSummaryOperation(previousTopicId, { onlyAuto: true });
+    }
     const sidebar = document.getElementById("summary-sidebar");
     const buildingInput = document.getElementById("building");
     const onTopicPage = isTopicPageUrl(currentPageUrl);
     if (sidebar && buildingInput) {
       if (onTopicPage) {
-        const topicId = extractTopicId();
+        const topicId = currentTopicId;
         buildingInput.value = topicId || "";
         toggleSummaryPanel();
         applySidebarSettings();
@@ -19884,9 +20205,9 @@ ${historyText}` : "已有问答历史：暂无",
       }
       if (initialTopicId) {
         updateSidebarSubmitButtonState(initialTopicId);
-        scheduleAutoSummarize(initialTopicId);
         await loadHistoryForCurrentTopic({ topicId: initialTopicId });
         autoShowHistoryIfExists(initialTopicId);
+        scheduleAutoSummarize(initialTopicId);
       } else {
         setSidebarHistoryButtonActive(false);
       }
