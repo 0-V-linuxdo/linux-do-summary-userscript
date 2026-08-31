@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.15
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.16
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.15
+// @version      [20260830] v1.0.16
+// @update-log   [20260830] v1.0.16: 对照 A-E 补齐 toast/已总结同步：本地已有则停重试；busy 世代不错清；关掉 toast 立即取消；进列表取消过期自动总结。
 // @update-log   [20260830] v1.0.15: 纠正 toast 与已总结状态不同步；已有总结则停止重试；关掉 toast 会取消过期请求。
 // @update-log   [20260830] v1.0.14: 切左侧 tab 不再整窗重排，去掉 hover 位移，切换更跟手。
 // @update-log   [20260830] v1.0.13: 设置弹窗标题栏垂直对齐；折叠侧栏图标改为正文色，不再用蓝色。
@@ -4156,7 +4157,9 @@ ${error.stack}`);
         toast: summarizingToast
       }) || { skipped: false, generation: null };
       if (started.skipped) {
+        summarizingToast.clear?.();
         createToast2("该话题正在总结中，请稍候...", "info", null, normalizedTopicId);
+        updateTopicSummaryButtons(normalizedTopicId);
         return;
       }
       try {
@@ -4488,7 +4491,9 @@ ${error.stack}`);
         force: true
       }) || { skipped: false, generation: null };
       if (started.skipped) {
+        summarizingToast.clear?.();
         createToast2("该话题正在总结中，请稍候...", "info", null, normalizedTopicId);
+        updateTopicSummaryButtons(normalizedTopicId);
         return;
       }
       try {
@@ -13406,8 +13411,18 @@ ${error.stack}`);
     const waitForRetry = typeof options.waitForRetry === "function" ? options.waitForRetry : defaultContentRetryWait;
     const onRetry = typeof options.onRetry === "function" ? options.onRetry : null;
     const shouldHandleRateLimit = isLinuxDoContentUrl(url);
+    const signal = fetchOptions?.signal;
+    const throwIfAborted = () => {
+      if (!signal?.aborted) return;
+      const cancelled = new Error("总结已取消");
+      cancelled.name = "AbortError";
+      cancelled.code = "SUMMARY_CANCELLED";
+      cancelled.retryable = false;
+      throw cancelled;
+    };
     let retryAttempt = 0;
     while (true) {
+      throwIfAborted();
       const response = await fetchImpl(url, fetchOptions);
       if (!shouldHandleRateLimit || response?.status !== 429) {
         return response;
@@ -13423,10 +13438,35 @@ ${error.stack}`);
         retryAttempt: retryAttempt + 1,
         retryCount
       };
+      throwIfAborted();
       if (onRetry) {
         await onRetry(retryInfo);
       }
-      await waitForRetry(delaySeconds, retryInfo);
+      throwIfAborted();
+      if (!signal) {
+        await waitForRetry(delaySeconds, retryInfo);
+      } else {
+        await new Promise((resolve, reject) => {
+          if (signal.aborted) {
+            reject(Object.assign(new Error("总结已取消"), {
+              name: "AbortError",
+              code: "SUMMARY_CANCELLED",
+              retryable: false
+            }));
+            return;
+          }
+          const timer = setTimeout(resolve, delaySeconds * 1e3);
+          const onAbort = () => {
+            clearTimeout(timer);
+            reject(Object.assign(new Error("总结已取消"), {
+              name: "AbortError",
+              code: "SUMMARY_CANCELLED",
+              retryable: false
+            }));
+          };
+          signal.addEventListener("abort", onAbort, { once: true });
+        });
+      }
       retryAttempt += 1;
     }
   }
@@ -13491,6 +13531,7 @@ ${error.stack}`);
       const error = new Error(message);
       error.code = code;
       error.retryable = false;
+      if (code === "SUMMARY_CANCELLED") error.name = "AbortError";
       return error;
     }
     function isSummaryStopError(error) {
@@ -13501,28 +13542,90 @@ ${error.stack}`);
       if (error.name === "AbortError") return true;
       return error.retryable === false || error.code === "CONTENT_FILTER_BLOCKED" || isSummaryStopError(error);
     }
+    function createAbortController() {
+      try {
+        return new AbortController();
+      } catch (_error) {
+        const listeners = [];
+        const signal = {
+          aborted: false,
+          addEventListener(type, fn) {
+            if (type === "abort" && typeof fn === "function") listeners.push(fn);
+          },
+          removeEventListener(type, fn) {
+            const index = listeners.indexOf(fn);
+            if (index >= 0) listeners.splice(index, 1);
+          }
+        };
+        return {
+          signal,
+          abort() {
+            if (signal.aborted) return;
+            signal.aborted = true;
+            listeners.splice(0).forEach((fn) => {
+              try {
+                fn();
+              } catch (_ignored) {
+              }
+            });
+          }
+        };
+      }
+    }
     function getActiveSummaryOperation(topicId) {
       const normalizedTopicId = normalizeTopicId4(topicId);
       if (!normalizedTopicId) return null;
       return summaryOperationsByTopic.get(normalizedTopicId) || null;
     }
+    function getActivePageTopicId() {
+      try {
+        if (typeof extractTopicId2 === "function") {
+          const fromExtractor = normalizeTopicId4(extractTopicId2());
+          if (fromExtractor) return fromExtractor;
+        }
+      } catch (_error) {
+      }
+      const buildingInput = document.getElementById("building");
+      return normalizeTopicId4(buildingInput?.value);
+    }
+    function isCurrentPageTopic(topicId) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      if (!normalizedTopicId) return false;
+      const onTopicPage = typeof isTopicPageUrl2 === "function"
+        ? isTopicPageUrl2(state2.currentPageUrl || window.location.href)
+        : /\/t\/topic\/\d+/.test(String(state2.currentPageUrl || window.location.href || ""));
+      if (!onTopicPage) return false;
+      const activeTopicId = getActivePageTopicId();
+      return !activeTopicId || activeTopicId === normalizedTopicId;
+    }
+    function topicHasLocalSummary(topicId) {
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      if (!normalizedTopicId) return false;
+      try {
+        const history = getSummaryHistory2(normalizedTopicId);
+        return Array.isArray(history) && history.length > 0;
+      } catch (_error) {
+        return false;
+      }
+    }
     function getSummaryStopDecision(topicId, operationContext = null) {
       const normalizedTopicId = normalizeTopicId4(topicId);
       const generation = operationContext?.generation;
       const mode = operationContext?.mode || "manual";
+      const operation = getActiveSummaryOperation(normalizedTopicId);
       if (generation) {
-        const operation = getActiveSummaryOperation(normalizedTopicId);
-        if (!operation || operation.generation !== generation || operation.aborted) {
+        if (!operation || operation.generation !== generation || operation.aborted || operation.dismissed) {
           return createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
         }
+      } else if (operation?.aborted || operation?.dismissed) {
+        return createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
+      }
+      if (mode === "auto" && !isCurrentPageTopic(normalizedTopicId)) {
+        return createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
       }
       if (mode === "auto" || operationContext?.stopIfExistingHistory) {
-        try {
-          const history = getSummaryHistory2(normalizedTopicId);
-          if (Array.isArray(history) && history.length > 0) {
-            return createSummaryStopError("SUMMARY_HAS_EXISTING", "已有总结，已停止重试");
-          }
-        } catch (_error) {
+        if (topicHasLocalSummary(normalizedTopicId)) {
+          return createSummaryStopError("SUMMARY_HAS_EXISTING", "已有总结，已停止重试");
         }
       }
       return null;
@@ -13540,26 +13643,18 @@ ${error.stack}`);
           existing.controller?.abort?.();
         } catch (_error) {
         }
+        try {
+          existing.toast?.clear?.();
+        } catch (_error) {
+        }
       }
       summaryOperationSeq += 1;
       const generation = `${normalizedTopicId}:${summaryOperationSeq}:${Date.now()}`;
-      let controller = null;
-      try {
-        controller = new AbortController();
-      } catch (_error) {
-        controller = {
-          abort() {
-          },
-          signal: {
-            aborted: false,
-            addEventListener() {
-            }
-          }
-        };
-      }
+      const controller = createAbortController();
       const operation = {
         generation,
         aborted: false,
+        dismissed: false,
         mode,
         toast,
         controller
@@ -13578,7 +13673,9 @@ ${error.stack}`);
     function finishSummaryOperation(topicId, generation) {
       const normalizedTopicId = normalizeTopicId4(topicId);
       const existing = summaryOperationsByTopic.get(normalizedTopicId);
-      if (existing && (!generation || existing.generation === generation)) {
+      const isCurrent = !existing || !generation || existing.generation === generation;
+      if (!isCurrent) return;
+      if (existing) {
         summaryOperationsByTopic.delete(normalizedTopicId);
       }
       state2.summarizingTopics.delete(normalizedTopicId);
@@ -13592,11 +13689,27 @@ ${error.stack}`);
       if (!existing || existing.aborted) return false;
       if (options.onlyAuto && existing.mode !== "auto") return false;
       existing.aborted = true;
+      if (options.dismissed) existing.dismissed = true;
       try {
         existing.controller?.abort?.();
       } catch (_error) {
       }
+      if (options.clearToast !== false) {
+        try {
+          existing.toast?.clear?.();
+        } catch (_error) {
+        }
+      }
       return true;
+    }
+    function abortAllAutoSummaryOperations() {
+      let aborted = 0;
+      for (const topicId of Array.from(summaryOperationsByTopic.keys())) {
+        if (abortSummaryOperation(topicId, { onlyAuto: true, clearToast: true })) {
+          aborted += 1;
+        }
+      }
+      return aborted;
     }
     function getContentRetryCount(operationApi = null) {
       const currentApiConfig = operationApi || (typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : null);
@@ -13638,7 +13751,6 @@ ${error.stack}`);
       if (!submitButton || !buildingInput) return;
       if (buildingInput.value === topicId) {
         const hasLocalHistory = getSummaryHistory2(topicId).length > 0;
-        const hasSummaryState = hasLocalHistory || isTopicMarkedSummarized2(topicId);
         if (state2.summarizingTopics.has(topicId)) {
           submitButton.disabled = true;
           submitButton.classList.add("summarizing");
@@ -13648,9 +13760,9 @@ ${error.stack}`);
         } else {
           submitButton.disabled = false;
           submitButton.classList.remove("summarizing");
-          submitButton.classList.toggle("summarized", hasSummaryState);
-          submitButton.textContent = hasSummaryState ? "📝 已总结" : "⚡ 总结";
-          submitButton.title = hasSummaryState ? "重新总结 主题&回复" : "总结 主题&回复";
+          submitButton.classList.toggle("summarized", hasLocalHistory);
+          submitButton.textContent = hasLocalHistory ? "📝 已总结" : "⚡ 总结";
+          submitButton.title = hasLocalHistory ? "重新总结 主题&回复" : "总结 主题&回复";
         }
       } else {
         submitButton.disabled = false;
@@ -13998,18 +14110,26 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         if (retryAttempt < retryCount) {
           const beforeRetryStop = getSummaryStopDecision(building, operationContext);
           if (beforeRetryStop) throw beforeRetryStop;
+          const operation = getActiveSummaryOperation(building);
+          if (operation?.aborted || operation?.dismissed) {
+            throw createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
+          }
           setTopicRetryVisualState(building, true);
-          const retryMessage = `总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`;
-          const toast = operationContext?.toast;
-          if (toast && typeof toast.changeType === "function") {
-            toast.changeType("warning", 0);
-            toast.update(retryMessage);
-          } else {
-            createToast2(retryMessage, "warning", 0, building);
+          const topicTitle = getTopicTitle2?.(building);
+          const topicLabel = topicTitle ? `「${topicTitle}」` : `话题#${building}`;
+          const retryMessage = `${topicLabel} 总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`;
+          const toast = operationContext?.toast || operation?.toast;
+          if (!operation?.dismissed) {
+            if (toast && typeof toast.changeType === "function") {
+              toast.changeType("warning", 0);
+              toast.update(retryMessage);
+            } else {
+              createToast2(retryMessage, "warning", 0, building);
+            }
           }
           await new Promise((resolve) => {
             const timer = setTimeout(resolve, retryInterval * 1e3);
-            const signal = operationContext?.controller?.signal;
+            const signal = operationContext?.controller?.signal || operation?.controller?.signal;
             if (!signal) return;
             if (signal.aborted) {
               clearTimeout(timer);
@@ -14134,6 +14254,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
         toast: summarizingToastEarly
       });
       if (started.skipped) {
+        summarizingToastEarly.clear?.();
         createToast2("该话题正在总结中，请稍候...", "info", null, topicId);
         showSummarizingInterface(resultDiv, topicId);
         historyDiv.style.display = "none";
@@ -14227,45 +14348,76 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
     }
     async function attemptAutoSummarize2(topicId) {
       if (!state2.newTopicAutoSummarize) return;
-      const { hasLocalHistory } = getTopicSummaryState(topicId);
+      const normalizedTopicId = normalizeTopicId4(topicId);
+      if (!normalizedTopicId) return;
+      if (!isCurrentPageTopic(normalizedTopicId)) return;
+      let { hasLocalHistory, hasSummaryState } = getTopicSummaryState(normalizedTopicId);
       if (hasLocalHistory) {
         return;
       }
-      if (state2.summarizingTopics.has(topicId)) {
+      if (hasSummaryState && canAttemptDrivePull()) {
+        try {
+          await ensureSidebarTopicHistoryFromDrive(normalizedTopicId, {
+            force: true,
+            probeOnly: false
+          });
+        } catch (_error) {
+        }
+        if (getTopicSummaryState(normalizedTopicId).hasLocalHistory) {
+          autoShowHistoryIfExists2(normalizedTopicId);
+          updateSidebarSubmitButtonState2(normalizedTopicId);
+          updateTopicSummaryButtons?.(normalizedTopicId);
+          return;
+        }
+      }
+      if (!isCurrentPageTopic(normalizedTopicId)) return;
+      if (getTopicSummaryState(normalizedTopicId).hasLocalHistory) return;
+      if (state2.summarizingTopics.has(normalizedTopicId)) {
         return;
       }
-      getTopicTitle2?.(topicId);
-      const summarizingToast = createSummarizingToast2(topicId);
+      getTopicTitle2?.(normalizedTopicId);
+      const summarizingToast = createSummarizingToast2(normalizedTopicId);
       const requestContext = captureCurrentSummaryRequestContext2();
       const operationApi = {
         ...typeof getCurrentApiConfiguration2 === "function" ? getCurrentApiConfiguration2() : {}
       };
-      const started = beginSummaryOperation(topicId, {
+      const started = beginSummaryOperation(normalizedTopicId, {
         mode: "auto",
         toast: summarizingToast
       });
       if (started.skipped) {
+        summarizingToast.clear?.();
+        return;
+      }
+      if (getSummaryStopDecision(normalizedTopicId, {
+        generation: started.generation,
+        mode: "auto",
+        stopIfExistingHistory: true
+      })) {
+        summarizingToast.clear?.();
+        finishSummaryOperation(normalizedTopicId, started.generation);
         return;
       }
       try {
         const { startFloor, endFloor } = await getFullFloorRangeForTopic(
-          topicId,
+          normalizedTopicId,
           DEFAULT_FULL_FLOOR_END,
           operationApi
         );
-        const summary = await main(topicId, startFloor, endFloor, 0, operationApi, {
+        const summary = await main(normalizedTopicId, startFloor, endFloor, 0, operationApi, {
           generation: started.generation,
           mode: "auto",
           toast: summarizingToast,
-          controller: started.controller
+          controller: started.controller,
+          stopIfExistingHistory: true
         });
         summarizingToast.changeType("success");
         summarizingToast.update("话题自动总结完成！");
-        saveSummaryHistory2(topicId, summary, requestContext.model, requestContext);
-        pendingManualAfterDriveFailTopics2.delete(topicId);
+        saveSummaryHistory2(normalizedTopicId, summary, requestContext.model, requestContext);
+        pendingManualAfterDriveFailTopics2.delete(normalizedTopicId);
         loadHistoryForCurrentTopic2();
-        autoShowHistoryIfExists2(topicId);
-        if (document.getElementById("building")?.value === topicId) {
+        autoShowHistoryIfExists2(normalizedTopicId);
+        if (document.getElementById("building")?.value === normalizedTopicId) {
           loadHistoryForCurrentTopic2();
         }
       } catch (error) {
@@ -14274,20 +14426,21 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
             summarizingToast.changeType("success", 2400);
             summarizingToast.update("已有总结，已停止重试");
             loadHistoryForCurrentTopic2();
-            autoShowHistoryIfExists2(topicId);
+            autoShowHistoryIfExists2(normalizedTopicId);
+            updateTopicSummaryButtons?.(normalizedTopicId);
           } else {
             summarizingToast.clear?.();
           }
         } else {
-          console.error(`Auto summarize error for topic ${topicId}:`, error);
+          console.error(`Auto summarize error for topic ${normalizedTopicId}:`, error);
           summarizingToast.changeType("error");
           summarizingToast.update(`自动总结失败: ${error.message}`);
-          if (document.getElementById("building")?.value === topicId) {
+          if (document.getElementById("building")?.value === normalizedTopicId) {
             displayError(`自动总结失败: ${error.message}`);
           }
         }
       } finally {
-        finishSummaryOperation(topicId, started.generation);
+        finishSummaryOperation(normalizedTopicId, started.generation);
       }
     }
     async function ensureSidebarTopicHistoryFromDrive(topicId, {
@@ -14469,6 +14622,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       beginSummaryOperation,
       finishSummaryOperation,
       abortSummaryOperation,
+      abortAllAutoSummaryOperations,
       isSummaryStopError,
       buildTopicContentContext,
       buildTopicQuestionContext,
@@ -19242,7 +19396,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
       topicTitleFetchPromises,
       getFetchOptions: () => getFetchOptions(),
       onToastClick: (...args) => handleToastClick(...args),
-      onToastDismiss: (topicId) => topicSummaryFeature?.abortSummaryOperation?.(topicId)
+      onToastDismiss: (topicId) => topicSummaryFeature?.abortSummaryOperation?.(topicId, { dismissed: true, clearToast: false })
     });
     ({
       createToast,
@@ -19862,6 +20016,9 @@ ${historyText}` : "已有问答历史：暂无",
   function abortSummaryOperation(topicId, options = {}) {
     return topicSummaryFeature?.abortSummaryOperation?.(topicId, options);
   }
+  function abortAllAutoSummaryOperations() {
+    return topicSummaryFeature?.abortAllAutoSummaryOperations?.();
+  }
   function scheduleAutoSummarize(topicId) {
     const normalizedTopicId = normalizeTopicId3(topicId);
     if (!normalizedTopicId) return;
@@ -20019,7 +20176,10 @@ ${historyText}` : "已有问答历史：暂无",
     const previousTopicId = extractTopicIdFromUrl(previousUrl);
     const currentTopicId = extractTopicId();
     if (previousTopicId && previousTopicId !== currentTopicId) {
-      abortSummaryOperation(previousTopicId, { onlyAuto: true });
+      abortSummaryOperation(previousTopicId, { onlyAuto: true, clearToast: true });
+    }
+    if (!currentTopicId) {
+      abortAllAutoSummaryOperations();
     }
     const sidebar = document.getElementById("summary-sidebar");
     const buildingInput = document.getElementById("building");
