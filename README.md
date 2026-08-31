@@ -2,13 +2,13 @@
 
 给 Linux.do 用户用的浏览器脚本：在话题页和列表页一键生成结构化总结，也可以围绕当前话题继续提问、回看历史记录，并按需同步到 Google Drive。
 
-当前版本：**[20260830] v1.0.16**
+当前版本：**[20260830] v1.0.17**
 
 ## 安装
 
 1. 先安装一个用户脚本管理器，例如 Violentmonkey 或 Tampermonkey。
 2. 点击安装脚本：
-   [安装最新版 [20260830] v1.0.16](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
+   [安装最新版 [20260830] v1.0.17](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
 3. 打开 `https://linux.do/`，进入任意话题页。
 4. 点击侧边栏里的 `🛠️` 设置按钮，填写你的 API 地址、API Key 和模型名。
 
@@ -38,6 +38,7 @@
 - 切 tab：[20260830] v1.0.14 起点击左侧分组不再整窗测量重排，去掉按钮 hover 位移，右侧内容切换更跟手。
 - 状态同步：[20260830] v1.0.15 起已有本地总结时不再继续重试；列表「已总结」只在本地确有内容时显示；关掉 toast 会取消过期请求。
 - 状态同步补齐：[20260830] v1.0.16 起对照 A–E 补齐剩余空洞：busy 世代不错清；重试 toast 带话题标题；关掉 toast 立即取消且不再重建；进列表会取消过期自动总结；自动总结先拉 Drive 再决定是否生成。
+- Toast 标题：[20260830] v1.0.17 起长话题标题在 Toast 里截断省略，卡片固定约 360px；悬停仍可看完整标题，重试文案不再把标题再写一遍。
 
 ## 使用方式
 
