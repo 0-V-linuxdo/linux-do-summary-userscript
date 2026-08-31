@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.16
+// @name         [LINUX DO] 🌟 话题 & 回复 总结 [20260830] v1.0.17
 // @namespace    0_V userscripts/[LINUX DO] 🌟 主题 & 回复 总结
 // @description  在 Linux.do 的话题页和列表页一键生成结构化总结，支持自动总结、历史回看、Toast 提醒、配置导入导出与 Google Drive 同步。
-// @version      [20260830] v1.0.16
+// @version      [20260830] v1.0.17
+// @update-log   [20260830] v1.0.17: Toast 长标题截断省略，固定卡片宽度；重试文案不再重复完整标题。
 // @update-log   [20260830] v1.0.16: 对照 A-E 补齐 toast/已总结同步：本地已有则停重试；busy 世代不错清；关掉 toast 立即取消；进列表取消过期自动总结。
 // @update-log   [20260830] v1.0.15: 纠正 toast 与已总结状态不同步；已有总结则停止重试；关掉 toast 会取消过期请求。
 // @update-log   [20260830] v1.0.14: 切左侧 tab 不再整窗重排，去掉 hover 位移，切换更跟手。
@@ -1075,11 +1076,34 @@ ${promptConfig.outputFormat}`;
     const normalized = String(topicId).trim();
     return normalized || "";
   }
+  var TOAST_TITLE_MAX_WIDTH = 28;
+  function measureToastTextWidth(text) {
+    const value = typeof text === "string" ? text : "";
+    let width = 0;
+    for (const char of value) {
+      width += char.charCodeAt(0) > 255 ? 2 : 1;
+    }
+    return width;
+  }
+  function truncateToastTopicTitle(title, maxWidth = TOAST_TITLE_MAX_WIDTH) {
+    const normalized = typeof title === "string" ? title.replace(/\s+/g, " ").trim() : "";
+    if (!normalized) return "";
+    if (measureToastTextWidth(normalized) <= maxWidth) return normalized;
+    let width = 0;
+    let out = "";
+    for (const char of normalized) {
+      const next = char.charCodeAt(0) > 255 ? 2 : 1;
+      if (width + next > maxWidth - 2) break;
+      out += char;
+      width += next;
+    }
+    return `${out}…`;
+  }
   function formatToastTopicLabel(topicId, topicTitle) {
     const normalizedTopicId = topicId === null || topicId === void 0 ? "" : String(topicId).trim();
     const fallback = normalizedTopicId ? `话题#${normalizedTopicId}` : "话题";
     const normalizedTitle = typeof topicTitle === "string" ? topicTitle.trim() : "";
-    return `📌 ${normalizedTitle || fallback}`;
+    return `📌 ${truncateToastTopicTitle(normalizedTitle) || fallback}`;
   }
 
   // src/shared/summarySync.js
@@ -11517,7 +11541,8 @@ ${error.stack}`);
             flex-direction: column;
             gap: 10px;
             z-index: 10000;
-            max-width: 90%;
+            width: min(360px, calc(100vw - 32px));
+            max-width: min(360px, calc(100vw - 32px));
             max-height: 80vh;
             overflow-y: auto;
             overflow-x: hidden;
@@ -11538,9 +11563,11 @@ ${error.stack}`);
 
         /* Toast样式 */
         .summary-toast {
+            box-sizing: border-box;
             padding: 12px 30px 12px 15px; /* 右侧留出空间给关闭按钮 */
             border-radius: 8px;
-            min-width: 250px;
+            width: 100%;
+            min-width: 0;
             max-width: 100%;
             color: var(--toast-text);
             transform: translateY(8px);
@@ -11599,7 +11626,15 @@ ${error.stack}`);
             display: flex;
             flex-direction: column;
             gap: 5px;
+            min-width: 0;
             word-break: break-word;
+        }
+
+        .toast-content > span {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .toast-topic-info {
@@ -11607,6 +11642,9 @@ ${error.stack}`);
             opacity: 0.9;
             padding-top: 5px;
             border-top: 1px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         /* 可点击的Toast样式 */
@@ -12505,7 +12543,9 @@ ${error.stack}`);
       if (!toastElement) return;
       const topicInfoDiv = toastElement.querySelector(".toast-topic-info");
       if (!topicInfoDiv) return;
+      const normalizedTitle = typeof topicTitle === "string" ? topicTitle.trim() : "";
       topicInfoDiv.textContent = formatToastTopicLabel(topicId, topicTitle);
+      topicInfoDiv.title = normalizedTitle || formatToastTopicLabel(topicId, topicTitle);
     }
     function hydrateToastTopicTitle(toastElement, topicId) {
       if (!toastElement || !topicId) return;
@@ -12557,6 +12597,7 @@ ${error.stack}`);
         const topicInfoDiv = document.createElement("div");
         topicInfoDiv.className = "toast-topic-info";
         topicInfoDiv.textContent = formatToastTopicLabel(topicId, topicTitle);
+        topicInfoDiv.title = topicTitle;
         contentDiv.appendChild(topicInfoDiv);
         toast.appendChild(contentDiv);
         toast.dataset.topicId = topicId;
@@ -14115,9 +14156,7 @@ ${postImages.map(formatImagePlaceholder).join("\n")}` : "";
             throw createSummaryStopError("SUMMARY_CANCELLED", "总结已取消");
           }
           setTopicRetryVisualState(building, true);
-          const topicTitle = getTopicTitle2?.(building);
-          const topicLabel = topicTitle ? `「${topicTitle}」` : `话题#${building}`;
-          const retryMessage = `${topicLabel} 总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`;
+          const retryMessage = `总结失败，正在尝试第 ${retryAttempt + 2}/${retryCount + 1} 次重试...`;
           const toast = operationContext?.toast || operation?.toast;
           if (!operation?.dismissed) {
             if (toast && typeof toast.changeType === "function") {

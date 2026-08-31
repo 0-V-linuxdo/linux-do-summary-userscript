@@ -9,18 +9,27 @@ const vm = require('node:vm');
 
 const projectRoot = path.resolve(__dirname, '..');
 const userscriptDir = path.join(projectRoot, 'userscript');
-const bundleNames = fs.readdirSync(userscriptDir).filter((name) => name.endsWith('.user.js'));
-
-assert.equal(bundleNames.length, 1, 'expected exactly one userscript bundle');
-
-const bundlePath = path.join(userscriptDir, bundleNames[0]);
+const bundlePath = path.join(userscriptDir, 'linux-do-summary.user.js');
 const bundleSource = fs.readFileSync(bundlePath, 'utf8');
+assert.match(bundleSource, /@version\s+\[20260830\] v1\.0\.17/);
+const chineseCopy = path.join(userscriptDir, '[LINUX DO] 🌟 主题 & 回复 总结.user.js');
+if (fs.existsSync(chineseCopy)) {
+  assert.equal(
+    fs.readFileSync(chineseCopy, 'utf8'),
+    bundleSource,
+    'Chinese-named userscript copy must match linux-do-summary.user.js'
+  );
+}
 const bootstrapPattern = /  bootstrapUserscriptRuntime\(\);\n\}\)\(\);\s*$/;
+const polishMarker = '\n/* ===== [LINUX DO] 弹窗优化';
+const runnableBundleSource = bundleSource.includes(polishMarker)
+  ? bundleSource.slice(0, bundleSource.indexOf(polishMarker))
+  : bundleSource;
 
 function loadBundleInternals(exportNames, overrides = {}) {
-  assert.match(bundleSource, bootstrapPattern, 'userscript bootstrap anchor changed');
+  assert.match(runnableBundleSource, bootstrapPattern, 'userscript bootstrap anchor changed');
   const exportEntries = exportNames.map((name) => `${name}: ${name}`).join(', ');
-  const instrumentedSource = bundleSource.replace(
+  const instrumentedSource = runnableBundleSource.replace(
     bootstrapPattern,
     `  globalThis.__performanceTestInternals = { ${exportEntries} };\n})();\n`
   );
@@ -729,4 +738,28 @@ test('list rendering reads one history snapshot for the whole row batch', () => 
     assert.equal(item.querySelectorAll('.topic-summary-button').length, 1);
     assert.equal(item.querySelectorAll('.topic-question-button').length, 1);
   });
+});
+
+test('toast topic titles truncate by visual width and keep a hover title', () => {
+  const { internals } = loadBundleInternals([
+    'truncateToastTopicTitle',
+    'formatToastTopicLabel',
+    'measureToastTextWidth'
+  ]);
+  const longTitle = '慎用站内各种伪装成钉钉/飞书/微信的油猴脚本';
+  const truncated = internals.truncateToastTopicTitle(longTitle);
+  assert.equal(internals.measureToastTextWidth(longTitle) > 28, true);
+  assert.equal(truncated.endsWith('…'), true);
+  assert.equal(internals.measureToastTextWidth(truncated) <= 28, true);
+  assert.equal(truncated.includes(longTitle), false);
+  assert.equal(internals.truncateToastTopicTitle('短标题'), '短标题');
+  assert.equal(internals.formatToastTopicLabel('1166574', longTitle), `📌 ${truncated}`);
+  assert.equal(internals.formatToastTopicLabel('42', ''), '📌 话题#42');
+  assert.match(bundleSource, /#summary-toast-container[\s\S]{0,500}max-width:\s*min\(360px/);
+  assert.match(bundleSource, /\.toast-topic-info \{[\s\S]{0,300}text-overflow:\s*ellipsis/);
+  assert.match(
+    bundleSource,
+    /const retryMessage = `总结失败，正在尝试第 \$\{retryAttempt \+ 2\}\/\$\{retryCount \+ 1\} 次重试\.\.\.`;/
+  );
+  assert.equal(bundleSource.includes('`${topicLabel} 总结失败'), false);
 });
