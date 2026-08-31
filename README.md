@@ -2,13 +2,13 @@
 
 给 Linux.do 用户用的浏览器脚本：在话题页和列表页一键生成结构化总结，也可以围绕当前话题继续提问、回看历史记录，并按需同步到 Google Drive。
 
-当前版本：**[20260830] v1.0.14**
+当前版本：**[20260830] v1.0.15**
 
 ## 安装
 
 1. 先安装一个用户脚本管理器，例如 Violentmonkey 或 Tampermonkey。
 2. 点击安装脚本：
-   [安装最新版 [20260830] v1.0.14](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
+   [安装最新版 [20260830] v1.0.15](https://raw.githubusercontent.com/0-V-linuxdo/linux-do-summary-userscript/refs/heads/release/userscript/linux-do-summary.user.js)
 3. 打开 `https://linux.do/`，进入任意话题页。
 4. 点击侧边栏里的 `🛠️` 设置按钮，填写你的 API 地址、API Key 和模型名。
 
@@ -36,6 +36,7 @@
 - 子 tab 对比：[20260830] v1.0.12 起当前子 tab 改为实色填充，未选中子 tab 降低对比，在着色面板上也能一眼分清。
 - 标题栏：[20260830] v1.0.13 起折叠按钮、标题、关闭按钮垂直居中；侧栏折叠图标改用正文色，不再套蓝色。
 - 切 tab：[20260830] v1.0.14 起点击左侧分组不再整窗测量重排，去掉按钮 hover 位移，右侧内容切换更跟手。
+- 状态同步：[20260830] v1.0.15 起已有本地总结时不再继续重试；列表「已总结」只在本地确有内容时显示；关掉 toast 会取消过期请求。
 
 ## 使用方式
 
@@ -55,7 +56,8 @@
 
 - `📝 总结`：直接在列表中生成该话题摘要。
 - `📝 已总结`：表示本地已有总结，可展开查看。
-- `☁️ 拉取中...`：正在从 Google Drive 拉取已有总结。
+- `☁️ 拉取`：本地还没有总结，但可以从 Google Drive 拉取。
+- `⏳ 总结中...` / `☁️ 拉取中...`：正在生成或正在拉取，避免和已完成状态混在一起。
 
 ## 配置建议
 
